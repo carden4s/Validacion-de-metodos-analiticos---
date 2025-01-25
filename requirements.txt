@@ -1,8 +1,8 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy.stats import linregress, f_oneway
-import streamlit as st
-from sklearn.linear_model import LinearRegression
-import streamlit as st
+numpy 
+pandas 
+matplotlib.pyplot 
+seaborn 
+scipy.stats linregress, f_oneway
+streamlit 
+sklearn.linear_model LinearRegression
+streamlit
