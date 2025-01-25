@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress, f_oneway
 import streamlit as st
-from sklearn.linear_model import LinearRegression
-import streamlit as st
+
 
 # Page Configuration
 st.set_page_config(
@@ -243,7 +242,7 @@ def calcular_precision(datos):
         try:
             X = estandares_dia['Absorbancia'].values.reshape(-1, 1)
             y = estandares_dia['Concentración'].values
-            modelo = LinearRegression()
+            modelo = linregress()
             modelo.fit(X, y)
             muestras_dia['Concentración Real'] = modelo.predict(muestras_dia['Absorbancia'].values.reshape(-1, 1))
             datos_muestra.update(muestras_dia)
