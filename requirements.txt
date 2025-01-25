@@ -2,7 +2,10 @@ numpy
 pandas 
 matplotlib.pyplot 
 seaborn 
-scipy.stats linregress, f_oneway
+scipy.stats 
+linregress 
+f_oneway
 streamlit 
-sklearn.linear_model LinearRegression
+sklearn.linear_model 
+LinearRegression
 streamlit
