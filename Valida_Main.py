@@ -5,6 +5,7 @@ import seaborn as sns
 from scipy.stats import linregress, f_oneway
 import streamlit as st
 
+# Page Configuration
 
 # Page Configuration
 st.set_page_config(
