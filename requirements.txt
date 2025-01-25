@@ -3,9 +3,5 @@ pandas
 matplotlib
 seaborn 
 scipy 
-linregress 
-f_oneway
 streamlit 
 sklearn 
-LinearRegression
-streamlit
