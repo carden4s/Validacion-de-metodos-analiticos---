@@ -252,11 +252,10 @@ def calcular_precision(datos):
         try:
             X = estandares_dia['Absorbancia'].values.reshape(-1, 1)
             y = estandares_dia['Concentración'].values
-            modelo = linregress()
-            modelo.fit(X, y)
-            muestras_dia['Concentración Real'] = modelo.predict(muestras_dia['Absorbancia'].values.reshape(-1, 1))
+            slope, intercept, _, _, _ = linregress(X.flatten(), y)
+            muestras_dia['Concentración Real'] = slope * muestras_dia['Absorbancia'] + intercept
             datos_muestra.update(muestras_dia)
-            pendiente, intercepto = modelo.coef_[0], modelo.intercept_
+            pendiente, intercepto = slope, intercept
             st.write(f"**Curva de calibración para el día {dia}:** Concentración = {pendiente:.4f} * Absorbancia + {intercepto:.4f}")
         except Exception as e:
             st.error(f"Error ajustando la curva de calibración para el día {dia}: {e}")
@@ -413,9 +412,10 @@ elif modulo == "Límites de Detección y Cuantificación":
     st.header("Cálculo de LOD y LOQ")
     st.info(
         """
-        **Datos requeridos para este módulo:**
-        - **Ruido:** Datos del ruido del sistema.
-        - **Pendiente:** Datos de la pendiente de la curva de calibración.
+        - **Concentración:** Concentraciones de las soluciones estándar.
+        - **Absorbancia:** Valores de absorbancia medidos.
+        - **Tipo:** Identificar si es "Estándar" o "Muestra".
+        - **Día:** Día en que se realizó la medición.
         """
     )
     datos = st.file_uploader("Sube un archivo con datos de Ruido y Pendiente:", type=['csv', 'xlsx'])
