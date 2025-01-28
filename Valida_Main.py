@@ -6,8 +6,6 @@ from scipy.stats import linregress, f_oneway
 import streamlit as st
 
 # Page Configuration
-
-# Page Configuration
 st.set_page_config(
     page_title="Validación UV-Vis",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
