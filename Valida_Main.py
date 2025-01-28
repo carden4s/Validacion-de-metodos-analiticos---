@@ -43,7 +43,7 @@ st.markdown("""
 
     /* Footer styling */
     .footer {
-        position: fixed;
+        position: center;
         bottom: 0;
         left: 0;
         width: 100%;
