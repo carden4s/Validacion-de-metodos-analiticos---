@@ -43,13 +43,13 @@ st.markdown("""
 
     /* Footer styling */
     .footer {
-        position: center;
+        position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
         background-color: rgba(0, 0, 0, 0.05); /* Light background */
         color: gray;
-        text-align: right;
+        text-align: center;
         padding: 5px 15px;
         font-size: small;
         opacity: 0.8;
