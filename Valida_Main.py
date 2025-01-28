@@ -13,6 +13,17 @@ st.set_page_config(
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
     layout="wide"  # Centers all content
 )
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: black;
+        color: white;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Custom CSS for title and footer
 st.markdown("""
