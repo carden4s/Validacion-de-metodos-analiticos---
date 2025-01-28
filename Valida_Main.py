@@ -102,6 +102,9 @@ def validar_columnas(datos, columnas_necesarias):
 def calcular_regresion(datos_dia):
     """Calcula la regresión lineal y los parámetros LOD y LOQ."""
     x, y = datos_dia['Concentración'], datos_dia['Absorbancia']
+    if len(x) < 2 or len(y) < 2:
+        st.error("No hay suficientes datos para realizar la regresión. Se requieren al menos 2 puntos.")
+        return None, None, None, None, None
     regresion = linregress(x, y)
     slope, intercept = regresion.slope, regresion.intercept
     residuals = y - (slope * x + intercept)
@@ -252,7 +255,7 @@ def calcular_precision(datos):
         try:
             X = estandares_dia['Absorbancia'].values.reshape(-1, 1)
             y = estandares_dia['Concentración'].values
-            slope, intercept, _, _, _ = linregress(X.flatten(), y)
+            slope, intercept, _, _, _ = linregress(estandares_dia['Absorbancia'], estandares_dia['Concentración'])
             muestras_dia['Concentración Real'] = slope * muestras_dia['Absorbancia'] + intercept
             datos_muestra.update(muestras_dia)
             pendiente, intercepto = slope, intercept
