@@ -421,7 +421,7 @@ elif modulo == "Límites de Detección y Cuantificación":
         - **Día:** Día en que se realizó la medición.
         """
     )
-    datos = st.file_uploader("Sube un archivo con datos de Ruido y Pendiente:", type=['csv', 'xlsx'])
+    datos = st.file_uploader("Sube un archivo con datos de Absorbancia y Concentración:", type=['csv', 'xlsx'])
     if datos:
         try:
             datos_df = pd.read_csv(datos) if datos.name.endswith('.csv') else pd.read_excel(datos)
