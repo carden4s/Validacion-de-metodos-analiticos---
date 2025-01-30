@@ -415,6 +415,7 @@ elif modulo == "Límites de Detección y Cuantificación":
     st.header("Cálculo de LOD y LOQ")
     st.info(
         """
+        **Datos requeridos para este módulo:**
         - **Concentración:** Concentraciones de las soluciones estándar.
         - **Absorbancia:** Valores de absorbancia medidos.
         - **Tipo:** Identificar si es "Estándar" o "Muestra".
