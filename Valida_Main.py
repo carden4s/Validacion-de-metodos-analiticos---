@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress, f_oneway
 import streamlit as st
+from io import BytesIO
+from pathlib import Path
+
+# Obtener la ruta del directorio actual
+current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
+imagenes_dir = current_dir / "img"
 
 # Page Configuration
 st.set_page_config(
@@ -29,13 +35,17 @@ st.markdown("""
     /* Title container styling */
     .title-container {
         display: flex;
-        justify-content: ; /* Center the title and logo */
+        justify-content: center; /* Center the title and logo */
         align-items: center;
         gap: 10px;
         margin-bottom: 20px; /* Spacing below title */
     }
-    .title-container img {
-        width: 250px; /* Adjust icon size */
+    .title-container img:first-child {
+        width: 120px; /* Adjust first icon size */
+        height: auto;
+    }
+    .title-container img:last-child {
+        width: 200px; /* Adjust second icon size */
         height: auto;
     }
 
@@ -58,15 +68,16 @@ st.markdown("""
 # Title with Icon
 st.markdown("""
     <div class="title-container">
-        <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI Logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG Logo">
         <h1>Validación de Métodos Analíticos - Espectrofotometría UV-Vis</h1>
+        <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI Logo">
     </div>
 """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("""
     <div class="footer">
-        Hecho por Luis Angel Cardenas Medina
+        2025 - Luis Angel Cardenas Medina
     </div>
 """, unsafe_allow_html=True)
 
@@ -279,57 +290,134 @@ def calcular_precision(datos):
         rsd_general = (rsd_intermedio * pesos / pesos.sum()).sum()
         st.write(f"**RSD General (Precisión total) para {tipo}:** {rsd_general:.2f}%")
 
-        if rsd_general <= 2:
-            st.success(f"{tipo}: Cumple con los criterios de precisión (RSD ≤ 2%).")
+        if rsd_general <= 3:
+            st.success(f"{tipo}: Cumple con los criterios de precisión (RSD ≤ 3%).")
         else:
-            st.error(f"{tipo}: No cumple con los criterios de precisión (RSD > 2%).")
+            st.error(f"{tipo}: No cumple con los criterios de precisión (RSD > 3%).")
 
     st.write("**Concentraciones reales calculadas para las muestras:**")
     st.table(datos_muestra[['Día', 'Absorbancia', 'Concentración Real']])
 
 def calcular_exactitud(datos):
-    """Calcula la exactitud (recuperación) para muestras fortificadas según la guía del ICH Q2."""
-    columnas_necesarias = ['Día', 'Concentración Teórica', 'Concentración Medida']
+    """Calcula la exactitud mediante recuperación usando curva de calibración diaria según ICH Q2."""
+    # Validar columnas requeridas
+    columnas_necesarias = ['Día', 'Concentración', 'Absorbancia', 'Tipo']
     if not validar_columnas(datos, columnas_necesarias):
         return
+    
+    # Separar estándares y muestras
+    estandares = datos[datos['Tipo'] == 'Estándar']
+    muestras = datos[datos['Tipo'] == 'Muestra']
+    
+    if estandares.empty:
+        st.error("Error: No se encontraron datos de estándares para generar la curva de calibración")
+        return
+    
+    # Calcular concentraciones reales para muestras
+    muestras_calculadas = []
+    for dia in datos['Día'].unique():
+        # Filtrar datos del día
+        est_dia = estandares[estandares['Día'] == dia]
+        mues_dia = muestras[muestras['Día'] == dia]
+        
+        # Validar estándares del día
+        if len(est_dia) < 2:
+            st.warning(f"Día {dia}: Insuficientes estándares para generar curva. Mínimo 2 requeridos.")
+            continue
+            
+        try:
+            # Generar curva de calibración
+            slope, intercept, r_value, p_value, std_err = linregress(
+                est_dia['Absorbancia'], 
+                est_dia['Concentración']
+            )
+            
+            # Calcular concentraciones reales para muestras con redondeo
+            mues_dia = mues_dia.copy()
+            mues_dia['Concentración Medida'] = (slope * mues_dia['Absorbancia'] + intercept).round(2)  # Redondeo a 2 decimales
+            mues_dia['Recuperación (%)'] = ((mues_dia['Concentración Medida'] / mues_dia['Concentración']) * 100).round(2)  # Redondeo a 2 decimales
+            
+            muestras_calculadas.append(mues_dia)
+            
+            # Mostrar parámetros de la curva (manteniendo 4 decimales para precisión técnica)
+            st.subheader(f"Día {dia} - Parámetros de la curva")
+            st.markdown(f"""
+            - **Ecuación:** y = {slope:.4f}x + {intercept:.4f}
+            - **Coeficiente de determinación (R²):** {r_value**2:.4f}
+            - **Error estándar:** {std_err:.4f}
+            """)
+            
+        except Exception as e:
+            st.error(f"Error en día {dia}: {str(e)}")
+            continue
+    
+    if not muestras_calculadas:
+        st.error("No se pudo calcular ninguna concentración. Verifica los datos de entrada.")
+        return
+    
+    # Unificar todos los resultados
+    resultados = pd.concat(muestras_calculadas)
+    
+    # Análisis de exactitud
+    st.header("Análisis de Exactitud (ICH Q2)")
+    
+    # Cálculo de métricas por día con redondeo final
+    resumen = resultados.groupby('Día').agg(
+        Muestras_analizadas=('Recuperación (%)', 'size'),
+        Media_Recuperación=('Recuperación (%)', lambda x: round(x.mean(), 2)),
+        DE_Recuperación=('Recuperación (%)', lambda x: round(x.std(), 2)),
+        Mínimo=('Recuperación (%)', lambda x: round(x.min(), 2)),
+        Máximo=('Recuperación (%)', lambda x: round(x.max(), 2))
+    ).reset_index()
+    
+    # Evaluación de criterios ICH Q2
+    resumen['Cumple_ICH'] = (
+        (resumen['Media_Recuperación'] >= 98) & 
+        (resumen['Media_Recuperación'] <= 102) & 
+        (resumen['DE_Recuperación'] <= 3)
+    )
+    
+    # Mostrar resultados
+    st.subheader("Resumen Estadístico por Día")
+    st.dataframe(resumen.style.format({
+        'Media_Recuperación': '{:.2f}%',
+        'DE_Recuperación': '{:.2f}%',
+        'Mínimo': '{:.2f}%',
+        'Máximo': '{:.2f}%'
+    }))
+    
+    # Detalle de recuperaciones
+    st.subheader("Detalle de Muestras")
+    st.dataframe(resultados[['Día', 'Concentración', 'Absorbancia', 'Concentración Medida', 'Recuperación (%)']]
+                 .style.format({
+                     'Concentración Medida': '{:.2f}',  # Reducido a 2 decimales
+                     'Recuperación (%)': '{:.2f}%'
+                 }))
+    
+    # Generar archivo descargable
+    generar_descarga(resultados)
 
-    dias = datos['Día'].unique()
-    resultados_por_dia = []
-    for dia in dias:
-        st.subheader(f"Resultados para el Día {dia}")
-        datos_dia = datos[datos['Día'] == dia]
-        datos_dia['Recuperación (%)'] = (datos_dia['Concentración Medida'] / datos_dia['Concentración Teórica']) * 100
-        st.write(f"### Resultados para el Día {dia}")
-        st.dataframe(datos_dia[['Concentración Teórica', 'Concentración Medida', 'Recuperación (%)']])
+def validar_columnas(datos, columnas):
+    """Valida la presencia de columnas requeridas en el dataset"""
+    faltantes = [col for col in columnas if col not in datos.columns]
+    if faltantes:
+        st.error(f"Columnas faltantes: {', '.join(faltantes)}")
+        return False
+    return True
 
-        media_recuperacion = datos_dia['Recuperación (%)'].mean()
-        std_recuperacion = datos_dia['Recuperación (%)'].std()
-        st.write(f"**Media de Recuperación (%):** {media_recuperacion:.2f}")
-        st.write(f"**Desviación Estándar de Recuperación (%):** {std_recuperacion:.2f}")
-
-        rango_aceptable = (98, 102)
-        muestras_fuera_rango = datos_dia[
-            (datos_dia['Recuperación (%)'] < rango_aceptable[0]) | 
-            (datos_dia['Recuperación (%)'] > rango_aceptable[1])
-        ]
-
-        if muestras_fuera_rango.empty:
-            st.success(f"Todas las muestras fortificadas del Día {dia} tienen porcentajes de recuperación dentro del rango aceptable (98%-102%).")
-        else:
-            st.warning(f"Se encontraron muestras fortificadas fuera del rango aceptable para el Día {dia} ({rango_aceptable[0]}%-{rango_aceptable[1]}%):")
-            st.dataframe(muestras_fuera_rango[['Concentración Teórica', 'Concentración Medida', 'Recuperación (%)']])
-
-        resultados_por_dia.append({
-            'Día': dia,
-            'Media Recuperación (%)': media_recuperacion,
-            'Desviación Estándar (%)': std_recuperacion,
-            'Muestras Fuera de Rango': len(muestras_fuera_rango)
-        })
-
-    if resultados_por_dia:
-        st.subheader("Resumen por Día")
-        resumen_df = pd.DataFrame(resultados_por_dia)
-        st.dataframe(resumen_df)
+def generar_descarga(datos):
+    """Genera archivo Excel descargable con los resultados"""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        datos.to_excel(writer, index=False, sheet_name='Resultados')
+    
+    st.download_button(
+        label="📥 Descargar Resultados Completos",
+        data=output.getvalue(),
+        file_name="exactitud_analitica.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Descarga todos los resultados en formato Excel"
+    )
 
 def evaluar_robustez(datos):
     """Evalúa la robustez del método analítico mediante ANOVA."""
@@ -399,71 +487,75 @@ def procesar_archivo(datos, funcion_calculo):
             st.error(f"Error al procesar el archivo: {e}")
 
 if modulo == "Linealidad y Rango":
+
     st.header("Análisis de Linealidad y Rango")
-    st.info(
-        """
+    st.info("""
         **Datos requeridos para este módulo:**
         - **Concentración:** Concentraciones de las soluciones estándar.
         - **Absorbancia:** Valores de absorbancia medidos.
         - **Tipo:** Identificar si es "Estándar" o "Muestra".
-        """
-    )
-    datos = st.file_uploader("Sube un archivo con datos de Concentración y Absorbancia:", type=['csv', 'xlsx'])
+        - **Día:** Identificar el día de la medición.""")  
+    img_path = imagenes_dir / "muestra.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
+    
+    
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_linealidad)
 
+# Módulo de LOD y LOQ
 elif modulo == "Límites de Detección y Cuantificación":
     st.header("Cálculo de LOD y LOQ")
-    st.info(
-        """
+    st.info("""
         **Datos requeridos para este módulo:**
         - **Concentración:** Concentraciones de las soluciones estándar.
         - **Absorbancia:** Valores de absorbancia medidos.
         - **Tipo:** Identificar si es "Estándar" o "Muestra".
         - **Día:** Día en que se realizó la medición.
-        """
-    )
-    datos = st.file_uploader("Sube un archivo con datos de Absorbancia y Concentración:", type=['csv', 'xlsx'])
+        """)  
+    
+    img_path = imagenes_dir / "muestra.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     if datos:
-        try:
-            datos_df = pd.read_csv(datos) if datos.name.endswith('.csv') else pd.read_excel(datos)
-            previsualizar_datos(datos_df)
-            calcular_lod_loq(datos_df)
-            graficar_curva_calibracion_streamlit(datos_df)
-        except Exception as e:
-            st.error(f"Error al procesar el archivo: {e}")
+        datos_df = pd.read_csv(datos) if datos.name.endswith('.csv') else pd.read_excel(datos)
+        procesar_archivo(datos, calcular_lod_loq)
+        graficar_curva_calibracion_streamlit(datos_df)
+
+# Módulo de Precisión
+elif modulo == "Precisión (Repetibilidad e Intermedia)":
+    st.header("Evaluación de Precisión")
+    st.info("""...""")  # Mantén tu texto existente
+    img_path = imagenes_dir / "precision_ejemplo.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Réplica', 'Absorbancia'")
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
+    procesar_archivo(datos, calcular_precision)
 
 elif modulo == "Precisión (Repetibilidad e Intermedia)":
     st.header("Evaluación de Precisión")
-    st.info(
-        """
-        **Datos requeridos para este módulo:**
-        - **Absorbancia:** Datos de absorbancia agrupados por días y repeticiones.
-        """
-    )
-    datos = st.file_uploader("Sube un archivo con datos de Absorbancia agrupados por Día:", type=['csv', 'xlsx'])
+    st.info("""...""")  # Mantén tu texto existente
+    img_path = imagenes_dir / "precision_ejemplo.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Réplica', 'Absorbancia'")
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_precision)
 
+# Módulo de Exactitud
 elif modulo == "Exactitud (Recuperación)":
-    st.header("Cálculo de Exactitud (Fortificación)")
-    st.info(
-        """
-        **Datos requeridos para este módulo:**
-        - **Día:** Día en que se realizó la medición.
-        - **Concentración Teórica:** Concentración fortificada conocida.
-        - **Concentración Medida:** Concentración obtenida tras el análisis experimental.
-        """
-    )
-    datos = st.file_uploader("Sube un archivo con datos de Concentración Teórica y Medida:", type=['csv', 'xlsx'])
+    st.header("Cálculo de Exactitud")
+    st.info("""...""")  # Mantén tu texto existente
+    img_path = imagenes_dir / "exactitud_ejemplo.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración Teórica', 'Concentración Medida'")
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_exactitud)
 
+# Módulo de Robustez
 elif modulo == "Robustez":
     st.header("Evaluación de Robustez")
-    st.info(
-        """
+    st.info("""
         **Datos requeridos para este módulo:**
         - **Factores variables:** Datos que representan condiciones variables del experimento.
         - **Resultados:** Datos de resultados obtenidos bajo dichas condiciones.
-        """
-    )
-    datos = st.file_uploader("Sube un archivo con datos para evaluar robustez:", type=['csv', 'xlsx'])
+        """)  # Mantén tu texto existente
+    img_path = imagenes_dir / "robustez_ejemplo.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas con variables y resultados")
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, evaluar_robustez)

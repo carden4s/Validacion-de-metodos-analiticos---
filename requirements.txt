@@ -5,3 +5,5 @@ seaborn
 scipy 
 streamlit 
 openpyxl
+BytesIO
+pathlib
