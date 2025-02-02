@@ -6,6 +6,7 @@ from scipy.stats import linregress, f_oneway
 import streamlit as st
 from io import BytesIO
 from pathlib import Path
+from matplotlib.figure import Figure
 
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
@@ -124,161 +125,331 @@ def calcular_regresion(datos_dia):
     loq = (10 * std_dev) / slope if slope != 0 else None
     return slope, intercept, lod, loq, std_dev
 
-def graficar_curva_calibracion_streamlit(datos):
-    """Grafica la curva de calibración con líneas indicativas de LOD y LOQ para cada día en Streamlit."""
-    columnas_necesarias = ['Día', 'Tipo', 'Concentración', 'Absorbancia']
-    if not validar_columnas(datos, columnas_necesarias):
-        return
-
-    datos_estandar = datos[datos['Tipo'] == 'Estándar']
-    if datos_estandar.empty:
-        st.error("No se encontraron datos de tipo 'Estándar' para realizar el cálculo.")
-        return
-
-    dias_unicos = datos_estandar['Día'].unique()
-    for dia in dias_unicos:
-        st.subheader(f"Curva de Calibración para el Día {dia}")
-        datos_dia = datos_estandar[datos_estandar['Día'] == dia]
-        if len(datos_dia) < 2:
-            st.warning(f"No hay suficientes datos para realizar la regresión en el Día {dia}. Se requieren al menos 2 puntos.")
-            continue
-
-        slope, intercept, lod, loq, std_dev = calcular_regresion(datos_dia)
-        if slope is None:
-            st.error(f"La pendiente de la regresión es 0 en el Día {dia}, no se pueden calcular LOD y LOQ.")
-            continue
-
-        y_pred = slope * datos_dia['Concentración'] + intercept
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.scatter(datos_dia['Concentración'], datos_dia['Absorbancia'], label="Datos experimentales", color='black')
-        ax.plot(datos_dia['Concentración'], y_pred, color='red', label="Curva de calibración")
-        ax.axvline(x=lod, color='green', linestyle='--', label=f"LOD ({lod:.4f})")
-        ax.axvline(x=loq, color='blue', linestyle='--', label=f"LOQ ({loq:.4f})")
-        ax.set_xlabel("Concentración")
-        ax.set_ylabel("Absorbancia")
-        ax.set_title(f"Curva de Calibración (Día {dia})")
-        ax.legend()
-        ax.grid()
-        st.pyplot(fig)
-
-# Funciones específicas por módulo
 
 def calcular_linealidad(datos):
     """Calcula la linealidad y rango del método considerando agrupación por días."""
+    # Configuración inicial de estilo
+    sns.set_theme(style="whitegrid", palette="muted")
+    COLORS = ['#2ecc71', '#e74c3c']  # Verde y rojo para temas
+    
+    # Validación mejorada
     columnas_necesarias = ['Concentración', 'Absorbancia', 'Tipo', 'Día']
     if not validar_columnas(datos, columnas_necesarias):
         return
+    
+    # Chequear valores numéricos
+    if not np.issubdtype(datos['Concentración'].dtype, np.number) or \
+       not np.issubdtype(datos['Absorbancia'].dtype, np.number):
+        st.error("Las columnas 'Concentración' y 'Absorbancia' deben ser numéricas")
+        return
 
     for dia, grupo_dia in datos.groupby('Día'):
-        st.write(f"### Día {dia}")
-        estandar = grupo_dia[grupo_dia['Tipo'] == 'Estándar']
-        if estandar.empty:
-            st.warning(f"No se encontraron datos de Estándar para el Día {dia}.")
-            continue
-
-        estandar_promedio = estandar.groupby('Concentración')['Absorbancia'].mean().reset_index()
-        
-        # Calcular parámetros de regresión
-        regresion = linregress(estandar_promedio['Concentración'], estandar_promedio['Absorbancia'])
-        slope = regresion.slope
-        intercept = regresion.intercept
-        r_value = regresion.rvalue
-        p_value = regresion.pvalue
-        
-        # Calcular residuales
-        predicciones = slope * estandar_promedio['Concentración'] + intercept
-        residuales = estandar_promedio['Absorbancia'] - predicciones
-
-        st.write(f"**Día {dia}:**")
-        st.write(f"  - **Pendiente (Slope):** {slope:.4f}")
-        st.write(f"  - **Intercepto (Intercept):** {intercept:.4f}")
-        st.write(f"  - **Coeficiente de correlación (R):** {r_value:.4f}")
-        st.write(f"  - **Coeficiente de determinación (R²):** {r_value**2:.4f}")
-        st.write(f"  - **Valor p:** {p_value:.4e}")
-
-        if r_value**2 >= 0.995:
-            st.success(f"Cumple con los criterios de linealidad para el Día {dia} (R² ≥ 0.995).")
-        else:
-            st.error(f"No cumple con los criterios de linealidad para el Día {dia} (R² < 0.995).")
-
-        # Gráfica de regresión lineal
-        plt.figure(figsize=(10, 4))
-        plt.subplot(1, 2, 1)
-        sns.regplot(x=estandar_promedio['Concentración'], y=estandar_promedio['Absorbancia'], 
-                   ci=None, line_kws={'color': 'red'})
-        plt.title(f"Regresión Lineal (Día {dia})")
-        plt.xlabel("Concentración")
-        plt.ylabel("Absorbancia")
-
-        # Gráfica de residuales
-        plt.subplot(1, 2, 2)
-        sns.scatterplot(x=estandar_promedio['Concentración'], y=residuales, color='blue')
-        plt.axhline(y=0, color='red', linestyle='--')
-        plt.title(f"Análisis de Residuales (Día {dia})")
-        plt.xlabel("Concentración")
-        plt.ylabel("Residuales")
-        plt.tight_layout()
-        st.pyplot(plt)
-
-        # Interpretación de residuales
-        with st.expander("Interpretación de Residuales"):
-            st.markdown("""
-            **Patrones a observar:**
-            - **Distribución aleatoria alrededor de cero:** Indica buen ajuste del modelo
-            - **Patrón no lineal:** Sugiere relación no capturada por el modelo
-            - **Funnel shape (Cono):** Indica heterocedasticidad (varianza no constante)
-            - **Outliers evidentes:** Puntos que se desvían significativamente
-            """)
+        with st.container():
+            st.markdown(f"## 📅 Día {dia}")
             
-            if (abs(residuales) > 2 * residuales.std()).any():
-                st.warning("Se detectaron posibles outliers en los residuales")
-            else:
-                st.success("Residuales dentro del rango esperado (±2σ)")
+            # Sección de estándares
+            estandar = grupo_dia[grupo_dia['Tipo'] == 'Estándar']
+            if estandar.empty:
+                st.warning(f"⚠️ No se encontraron datos de Estándar para el Día {dia}.")
+                continue
+                
+            # Procesamiento de datos
+            estandar_promedio = estandar.groupby('Concentración')['Absorbancia'].mean().reset_index()
+            
+            try:
+                # Cálculo de regresión con manejo de errores
+                regresion = linregress(estandar_promedio['Concentración'], estandar_promedio['Absorbancia'])
+                slope = regresion.slope
+                intercept = regresion.intercept
+                r_value = regresion.rvalue
+                p_value = regresion.pvalue
+                predicciones = slope * estandar_promedio['Concentración'] + intercept
+                residuales = estandar_promedio['Absorbancia'] - predicciones
+            except Exception as e:
+                st.error(f"❌ Error en análisis de regresión: {str(e)}")
+                continue
 
-        muestra = grupo_dia[grupo_dia['Tipo'] == 'Muestra']
-        if not muestra.empty:
-            x_muestra = muestra['Absorbancia']
-            concentraciones_estimadas = (x_muestra - intercept) / slope
-            muestra['Concentración Estimada'] = concentraciones_estimadas
+            # Mostrar métricas en columnas
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### 📊 Métricas de Regresión")
+                st.metric("Coeficiente de Determinación (R²)", f"{r_value**2:.4f}")
+                st.metric("Pendiente (Slope)", f"{slope:.4f}")
+                st.metric("Intercepto", f"{intercept:.4f}")
+                
+            with col2:
+                st.markdown("### 📈 Evaluación de Calidad")
+                st.metric("Coeficiente de Correlación (R)", f"{r_value:.4f}")
+                st.metric("Valor p", f"{p_value:.4e}")
+                cumplimiento = r_value**2 >= 0.995
+                st.metric("Cumplimiento ICH Q2(R² ≥ 0.995)", 
+                        "✅ Cumple" if cumplimiento else "❌ No Cumple",
+                        delta=f"{r_value**2 - 0.995:.4f}" if not cumplimiento else None)
 
-            plt.figure(figsize=(8, 5))
-            sns.scatterplot(x=muestra['Concentración Estimada'], y=muestra['Absorbancia'], color='blue', label='Muestra')
-            plt.title(f"Concentración Estimada de la Muestra (Día {dia})")
-            plt.xlabel("Concentración Estimada")
-            plt.ylabel("Absorbancia")
-            st.pyplot(plt)
+            # Gráficos profesionales con estilo unificado
+            fig = plt.figure(figsize=(14, 6), facecolor='#f8f9fa')
+            gs = fig.add_gridspec(1, 2)
+            
+            # Gráfico de Regresión
+            ax1 = fig.add_subplot(gs[0, 0])
+            sns.regplot(x=estandar_promedio['Concentración'], y=estandar_promedio['Absorbancia'], 
+                        ax=ax1, ci=95, scatter_kws={'s': 80, 'edgecolor': 'black', 'alpha': 0.8},
+                        line_kws={'color': COLORS[0], 'lw': 2, 'alpha': 0.8})
+            ax1.set_title(f"Regresión Lineal - Día {dia}", fontsize=14, pad=20)
+            ax1.set_xlabel("Concentración (μg/mL)", fontsize=12)
+            ax1.set_ylabel("Absorbancia (UA)", fontsize=12)
+            ax1.grid(True, linestyle='--', alpha=0.7)
+            
+            # Anotaciones en el gráfico
+            textstr = '\n'.join((
+                f'$R^2 = {r_value**2:.4f}$',
+                f'$y = {slope:.4f}x + {intercept:.4f}$'))
+            ax1.text(0.05, 0.95, textstr, transform=ax1.transAxes,
+                    fontsize=12, verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+            # Gráfico de Residuales
+            ax2 = fig.add_subplot(gs[0, 1])
+            residual_plot = sns.residplot(x=estandar_promedio['Concentración'], y=residuales,
+                                        ax=ax2, lowess=True, 
+                                        scatter_kws={'s': 60, 'color': COLORS[1], 'edgecolor': 'black'},
+                                        line_kws={'color': COLORS[0], 'lw': 2})
+            ax2.axhline(0, color='black', linestyle='--', lw=1.5)
+            ax2.set_title(f"Análisis de Residuales - Día {dia}", fontsize=14, pad=20)
+            ax2.set_xlabel("Concentración (μg/mL)", fontsize=12)
+            ax2.set_ylabel("Residuales", fontsize=12)
+            ax2.grid(True, linestyle='--', alpha=0.7)
+            
+            # Destacar outliers
+            outliers = np.abs(residuales) > 2 * residuales.std()
+            if outliers.any():
+                ax2.scatter(estandar_promedio['Concentración'][outliers], 
+                          residuales[outliers], 
+                          s=100, edgecolor='black', 
+                          facecolor='none', linewidth=1.5,
+                          label='Outliers (±2σ)')
+                ax2.legend()
+
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+
+            # Análisis de muestras con mejor visualización
+            muestra = grupo_dia[grupo_dia['Tipo'] == 'Muestra']
+            if not muestra.empty:
+                with st.expander(f"🧪 Resultados de Muestras - Día {dia}", expanded=False):
+                    try:
+                        muestra['Concentración Estimada'] = (muestra['Absorbancia'] - intercept) / slope
+                        
+                        # Gráfico de resultados
+                        fig_m = plt.figure(figsize=(10, 5))
+                        sns.scatterplot(x=muestra['Concentración Estimada'], 
+                                      y=muestra['Absorbancia'],
+                                      s=100, edgecolor='black',
+                                      color=COLORS[0], alpha=0.8)
+                        plt.title(f"Concentraciones Estimadas - Día {dia}", fontsize=14)
+                        plt.xlabel("Concentración Estimada (μg/mL)", fontsize=12)
+                        plt.ylabel("Absorbancia (UA)", fontsize=12)
+                        plt.grid(True, linestyle='--', alpha=0.5)
+                        st.pyplot(fig_m)
+                        plt.close(fig_m)
+                        
+                        # Tabla de resultados
+                        st.dataframe(
+                            muestra[['Absorbancia', 'Concentración Estimada']]
+                            .style.format("{:.4f}")
+                            .highlight_between(subset=['Concentración Estimada'], 
+                                             color='#f8d7da',  # Rojo claro
+                                             props='color: #721c24;',  # Texto oscuro
+                                             axis=None)
+                        )
+                    except ZeroDivisionError:
+                        st.error("Error: Pendiente cero, no se puede calcular concentración")
+
+            # Sección de interpretación interactiva
+            with st.expander("🔍 Guía de Interpretación", expanded=False):
+                st.markdown("""
+                **Análisis de Residuales:**
+                - ✅ **Distribución aleatoria:** Buen ajuste del modelo
+                - ⚠️ **Patrón no lineal:** Considerar modelo no lineal
+                - ❌ **Efecto embudo:** Varianza no constante
+                - 📌 **Outliers:** Verificar mediciones sospechosas
+
+                **Criterios ICH Q2:**
+                - $R^2 ≥ 0.995$ para validación
+                - Residuales < ±2σ (95% confianza)
+                """)
 
 def calcular_lod_loq(datos):
-    """Calcula los límites de detección y cuantificación (LOD y LOQ) según el método del ICH."""
+    """Calcula LOD y LOQ con visualización mejorada y validación extendida."""
+    # Configuración de estilo
+    COLORS = ['#3498db', '#2ecc71', '#e74c3c']  # Azul, Verde, Rojo
+    sns.set_theme(style="whitegrid", font_scale=0.95)
+    
+    # Validación mejorada
+    columnas_necesarias = ['Día', 'Tipo', 'Concentración', 'Absorbancia']
+    if not validar_columnas(datos, columnas_necesarias):
+        return
+    
+    # Chequear tipos numéricos
+    if not np.issubdtype(datos['Concentración'].dtype, np.number) or \
+       not np.issubdtype(datos['Absorbancia'].dtype, np.number):
+        st.error("❌ Las columnas 'Concentración' y 'Absorbancia' deben ser numéricas")
+        return
+
+    datos_estandar = datos[datos['Tipo'] == 'Estándar']
+    if datos_estandar.empty:
+        st.error("❌ No se encontraron datos de tipo 'Estándar'")
+        return
+
+    with st.expander("📊 Método de Cálculo ICH Q2", expanded=True):
+        st.markdown("""
+        **Fórmulas aplicadas:**
+        - $LOD = \\frac{3.3 \\times σ}{S}$  
+        - $LOQ = \\frac{10 \\times σ}{S}$  
+        Donde:
+        - σ: Desviación estándar de los residuales
+        - S: Pendiente de la curva de calibración
+        """)
+
+    dias_unicos = datos_estandar['Día'].unique()
+    for dia in dias_unicos:
+        with st.container():
+            st.markdown(f"## 📅 Día {dia}")
+            datos_dia = datos_estandar[datos_estandar['Día'] == dia]
+            
+            if len(datos_dia) < 3:
+                st.warning(f"⚠️ Mínimo 3 puntos requeridos para cálculo confiable (Día {dia})")
+                continue
+                
+            try:
+                slope, intercept, lod, loq, std_dev = calcular_regresion(datos_dia)
+                if slope is None:
+                    st.error(f"❌ Pendiente inválida en Día {dia}")
+                    continue
+                
+                # Mostrar métricas en columnas
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Pendiente (S)", f"{slope:.4f}")
+                    st.metric("Desviación Estándar (σ)", f"{std_dev:.4f}")
+                    
+                with col2:
+                    st.metric("Límite de Detección (LOD)", 
+                            f"{lod:.4f}", 
+                            help="3.3σ/S")
+                    st.metric("Límite de Cuantificación (LOQ)", 
+                            f"{loq:.4f}", 
+                            help="10σ/S")
+                
+                with col3:
+                    rango_dinamico = datos_dia['Concentración'].max() / lod
+                    st.metric("Rango Dinámico", 
+                            f"{rango_dinamico:.1f}:1", 
+                            help="Relación LOQ:LOD recomendada ≥ 3:1")
+                    st.metric("Cumplimiento ICH", 
+                            "✅" if rango_dinamico >= 3 else "❌", 
+                            delta="≥3:1" if rango_dinamico >=3 else None)
+
+                # Gráfico de datos brutos
+                with st.expander(f"🔍 Datos Detallados - Día {dia}", expanded=False):
+                    fig = plt.figure(figsize=(10, 4))
+                    ax = fig.add_subplot(111)
+                    sns.scatterplot(data=datos_dia, x='Concentración', y='Absorbancia',
+                                   s=100, color=COLORS[0], edgecolor='black',
+                                   ax=ax, label='Datos Experimentales')
+                    ax.set_title(f"Datos Crudos - Día {dia}", fontsize=14)
+                    ax.set_xlabel("Concentración (μg/mL)", fontsize=12)
+                    ax.set_ylabel("Absorbancia (UA)", fontsize=12)
+                    ax.grid(True, linestyle='--', alpha=0.5)
+                    st.pyplot(fig)
+                    plt.close(fig)
+                    
+            except Exception as e:
+                st.error(f"❌ Error en Día {dia}: {str(e)}")
+                continue
+
+def graficar_curva_calibracion_streamlit(datos):
+    """Grafica curva de calibración con estilo profesional y anotaciones."""
+    # Configuración de estilo
+    COLORS = ['#2ecc71', '#3498db', '#e74c3c']  # Verde, Azul, Rojo
+    plt.style.use('seaborn-talk')
+    
+    # Validación de datos
     columnas_necesarias = ['Día', 'Tipo', 'Concentración', 'Absorbancia']
     if not validar_columnas(datos, columnas_necesarias):
         return
 
     datos_estandar = datos[datos['Tipo'] == 'Estándar']
     if datos_estandar.empty:
-        st.error("No se encontraron datos de tipo 'Estándar' para realizar el cálculo.")
+        st.error("❌ No se encontraron datos de calibración")
         return
 
     dias_unicos = datos_estandar['Día'].unique()
     for dia in dias_unicos:
-        st.subheader(f"Resultados para el Día {dia}")
-        datos_dia = datos_estandar[datos_estandar['Día'] == dia]
-        if len(datos_dia) < 2:
-            st.warning(f"No hay suficientes datos para realizar la regresión en el Día {dia}. Se requieren al menos 2 puntos.")
-            continue
-
-        slope, intercept, lod, loq, std_dev = calcular_regresion(datos_dia)
-        if slope is None:
-            st.error(f"La pendiente de la regresión es 0 en el Día {dia}, no se pueden calcular LOD y LOQ.")
-            continue
-
-        st.write(f"**Pendiente de la regresión:** {slope:.4f}")
-        st.write(f"**Intercepto de la regresión:** {intercept:.4f}")
-        st.write(f"**Desviación estándar de los residuales:** {std_dev:.4f}")
-        st.write(f"**Límite de Detección (LOD):** {lod:.4f}")
-        st.write(f"**Límite de Cuantificación (LOQ):** {loq:.4f}")
-        st.write(f"**Datos del Día {dia}:**")
-        st.dataframe(datos_dia[['Concentración', 'Absorbancia']])
+        with st.container():
+            st.markdown(f"## 📈 Curva de Calibración - Día {dia}")
+            datos_dia = datos_estandar[datos_estandar['Día'] == dia]
+            
+            if len(datos_dia) < 3:
+                st.warning(f"⚠️ Mínimo 3 puntos recomendados para curva confiable (Día {dia})")
+                continue
+                
+            try:
+                slope, intercept, lod, loq, std_dev = calcular_regresion(datos_dia)
+                if slope is None:
+                    st.error(f"❌ Pendiente inválida en Día {dia}")
+                    continue
+                
+                # Crear figura profesional
+                fig = plt.figure(figsize=(10, 6), facecolor='#f8f9fa')
+                ax = fig.add_subplot(111)
+                
+                # Gráfico principal
+                sns.regplot(x=datos_dia['Concentración'], y=datos_dia['Absorbancia'],
+                           ax=ax, ci=95,
+                           scatter_kws={'s': 80, 'color': COLORS[0], 'edgecolor': 'black', 'alpha': 0.8},
+                           line_kws={'color': COLORS[1], 'lw': 2, 'alpha': 0.8})
+                
+                # Líneas de LOD/LOQ
+                ax.axvline(lod, color=COLORS[2], linestyle='--', lw=2, alpha=0.8, label=f'LOD ({lod:.2f})')
+                ax.axvline(loq, color=COLORS[1], linestyle='-.', lw=2, alpha=0.8, label=f'LOQ ({loq:.2f})')
+                
+                # Anotaciones profesionales
+                textstr = '\n'.join((
+                    f'$R^2 = {slope**2:.4f}$' if hasattr(slope, '__pow__') else '',
+                    f'$y = {slope:.4f}x + {intercept:.4f}$',
+                    f'σ = {std_dev:.4f}'))
+                ax.text(0.05, 0.95, textstr, transform=ax.transAxes,
+                       fontsize=12, verticalalignment='top',
+                       bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+                # Estilo del gráfico
+                ax.set_title(f"Curva de Calibración - Día {dia}", fontsize=16, pad=20)
+                ax.set_xlabel("Concentración (μg/mL)", fontsize=14)
+                ax.set_ylabel("Absorbancia (UA)", fontsize=14)
+                ax.grid(True, linestyle='--', alpha=0.5)
+                ax.legend(loc='lower right', frameon=True, shadow=True)
+                
+                # Resaltar área LOD/LOQ
+                ax.axvspan(0, loq, facecolor='#f8d7da', alpha=0.3, label='Zona LOD/LOQ')
+                
+                st.pyplot(fig)
+                plt.close(fig)
+                
+                # Tabla de datos adjunta
+                with st.expander(f"📋 Datos de Calibración - Día {dia}"):
+                    st.dataframe(
+                        datos_dia[['Concentración', 'Absorbancia']]
+                        .style.format("{:.4f}")
+                        .highlight_between(subset=['Concentración'], 
+                                         left=0, right=loq,
+                                         color='#fff3cd')  # Amarillo claro
+                    )
+                    
+            except Exception as e:
+                st.error(f"❌ Error en Día {dia}: {str(e)}")
+                continue
 
 def calcular_precision(datos):
     """Evalúa la precisión siguiendo la guideline ICH Q2 mediante el cálculo del RSD (Relative Standard Deviation)."""
