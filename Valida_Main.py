@@ -177,12 +177,22 @@ def calcular_linealidad(datos):
             continue
 
         estandar_promedio = estandar.groupby('Concentración')['Absorbancia'].mean().reset_index()
-        slope, intercept, _, _, _ = calcular_regresion(estandar_promedio)
-        r_value, p_value = linregress(estandar_promedio['Concentración'], estandar_promedio['Absorbancia'])[2:4]
+        
+        # Calcular parámetros de regresión
+        regresion = linregress(estandar_promedio['Concentración'], estandar_promedio['Absorbancia'])
+        slope = regresion.slope
+        intercept = regresion.intercept
+        r_value = regresion.rvalue
+        p_value = regresion.pvalue
+        
+        # Calcular residuales
+        predicciones = slope * estandar_promedio['Concentración'] + intercept
+        residuales = estandar_promedio['Absorbancia'] - predicciones
 
         st.write(f"**Día {dia}:**")
         st.write(f"  - **Pendiente (Slope):** {slope:.4f}")
         st.write(f"  - **Intercepto (Intercept):** {intercept:.4f}")
+        st.write(f"  - **Coeficiente de correlación (R):** {r_value:.4f}")
         st.write(f"  - **Coeficiente de determinación (R²):** {r_value**2:.4f}")
         st.write(f"  - **Valor p:** {p_value:.4e}")
 
@@ -191,12 +201,39 @@ def calcular_linealidad(datos):
         else:
             st.error(f"No cumple con los criterios de linealidad para el Día {dia} (R² < 0.995).")
 
-        plt.figure(figsize=(8, 5))
-        sns.regplot(x=estandar_promedio['Concentración'], y=estandar_promedio['Absorbancia'], ci=None, line_kws={'color': 'red'})
-        plt.title(f"Linealidad Día {dia}: Concentración vs Absorbancia (Estándar Promedio)")
+        # Gráfica de regresión lineal
+        plt.figure(figsize=(10, 4))
+        plt.subplot(1, 2, 1)
+        sns.regplot(x=estandar_promedio['Concentración'], y=estandar_promedio['Absorbancia'], 
+                   ci=None, line_kws={'color': 'red'})
+        plt.title(f"Regresión Lineal (Día {dia})")
         plt.xlabel("Concentración")
         plt.ylabel("Absorbancia")
+
+        # Gráfica de residuales
+        plt.subplot(1, 2, 2)
+        sns.scatterplot(x=estandar_promedio['Concentración'], y=residuales, color='blue')
+        plt.axhline(y=0, color='red', linestyle='--')
+        plt.title(f"Análisis de Residuales (Día {dia})")
+        plt.xlabel("Concentración")
+        plt.ylabel("Residuales")
+        plt.tight_layout()
         st.pyplot(plt)
+
+        # Interpretación de residuales
+        with st.expander("Interpretación de Residuales"):
+            st.markdown("""
+            **Patrones a observar:**
+            - **Distribución aleatoria alrededor de cero:** Indica buen ajuste del modelo
+            - **Patrón no lineal:** Sugiere relación no capturada por el modelo
+            - **Funnel shape (Cono):** Indica heterocedasticidad (varianza no constante)
+            - **Outliers evidentes:** Puntos que se desvían significativamente
+            """)
+            
+            if (abs(residuales) > 2 * residuales.std()).any():
+                st.warning("Se detectaron posibles outliers en los residuales")
+            else:
+                st.success("Residuales dentro del rango esperado (±2σ)")
 
         muestra = grupo_dia[grupo_dia['Tipo'] == 'Muestra']
         if not muestra.empty:
