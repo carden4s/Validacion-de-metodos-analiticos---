@@ -522,28 +522,33 @@ elif modulo == "Límites de Detección y Cuantificación":
         graficar_curva_calibracion_streamlit(datos_df)
 
 # Módulo de Precisión
-elif modulo == "Precisión (Repetibilidad e Intermedia)":
-    st.header("Evaluación de Precisión")
-    st.info("""...""")  # Mantén tu texto existente
-    img_path = imagenes_dir / "precision_ejemplo.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Réplica', 'Absorbancia'")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    procesar_archivo(datos, calcular_precision)
 
 elif modulo == "Precisión (Repetibilidad e Intermedia)":
     st.header("Evaluación de Precisión")
-    st.info("""...""")  # Mantén tu texto existente
-    img_path = imagenes_dir / "precision_ejemplo.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Réplica', 'Absorbancia'")
+    st.info(
+        """
+        **Datos requeridos para este módulo:**
+        - **Absorbancia:** Datos de absorbancia agrupados por días y repeticiones.
+        """
+    )
+    img_path = imagenes_dir / "muestra.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_precision)
 
 # Módulo de Exactitud
 elif modulo == "Exactitud (Recuperación)":
     st.header("Cálculo de Exactitud")
-    st.info("""...""")  # Mantén tu texto existente
-    img_path = imagenes_dir / "exactitud_ejemplo.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración Teórica', 'Concentración Medida'")
+    st.info(
+        """
+        **Datos requeridos para este módulo:**
+        - **Día:** Día en que se realizó la medición.
+        - **Concentración Teórica:** Concentración fortificada conocida.
+        - **Concentración Medida:** Concentración obtenida tras el análisis experimental.
+        """
+    )
+    img_path = imagenes_dir / "muestra.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_exactitud)
 
@@ -554,8 +559,8 @@ elif modulo == "Robustez":
         **Datos requeridos para este módulo:**
         - **Factores variables:** Datos que representan condiciones variables del experimento.
         - **Resultados:** Datos de resultados obtenidos bajo dichas condiciones.
-        """)  # Mantén tu texto existente
-    img_path = imagenes_dir / "robustez_ejemplo.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas con variables y resultados")
+        """) 
+    img_path = imagenes_dir / "muestra.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, evaluar_robustez)
