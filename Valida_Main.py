@@ -8,6 +8,9 @@ from io import BytesIO
 from pathlib import Path
 from matplotlib.figure import Figure
 import plotly.express as px
+from fpdf import FPDF
+import base64
+from datetime import datetime
 
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
@@ -656,6 +659,88 @@ def generar_descarga(datos):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         help="Descarga todos los resultados en formato Excel"
     )
+
+
+
+def generar_reporte_robustez(datos, factores):
+    """Genera un reporte PDF con los resultados del análisis de robustez."""
+    # Crear instancia de PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Título del reporte
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Reporte de Robustez - ICH Q2", ln=True, align='C')
+    pdf.ln(10)
+
+    # Información general
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Fecha de generación: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.cell(200, 10, txt=f"Número de muestras: {len(datos)}", ln=True)
+    pdf.ln(10)
+
+    # Sección de análisis por factor
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="Análisis por Factor", ln=True)
+    pdf.ln(5)
+
+    for factor in factores:
+        # Encabezado del factor
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt=f"Factor: {factor}", ln=True)
+        pdf.ln(2)
+
+        # Estadísticas
+        grupos = [g['Absorbancia'] for _, g in datos.groupby(factor)]
+        f_stat, p_val = f_oneway(*grupos)
+        eta_squared = f_stat * (len(grupos) - 1) / (len(datos) - len(grupos))
+
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt=f"- Estadístico F: {f_stat:.4f}", ln=True)
+        pdf.cell(200, 10, txt=f"- Valor p: {p_val:.4f}", ln=True)
+        pdf.cell(200, 10, txt=f"- Tamaño del efecto (η²): {eta_squared:.3f}", ln=True)
+        pdf.ln(5)
+
+        # Interpretación
+        robustez = p_val > 0.05 and eta_squared < 0.1
+        pdf.cell(200, 10, txt=f"Conclusión: {'Robusto' if robustez else 'No robusto'}", ln=True)
+        pdf.ln(10)
+
+    # Sección de gráficos
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="Gráficos de Robustez", ln=True)
+    pdf.ln(5)
+
+    for factor in factores:
+        # Generar gráfico
+        plt.figure(figsize=(8, 4))
+        sns.boxplot(x=factor, y='Absorbancia', data=datos)
+        plt.title(f"Distribución por {factor}")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
+        # Guardar gráfico temporalmente
+        img_path = f"boxplot_{factor}.png"
+        plt.savefig(img_path)
+        plt.close()
+
+        # Insertar gráfico en PDF
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt=f"Gráfico de {factor}", ln=True)
+        pdf.image(img_path, x=10, w=180)
+        pdf.ln(10)
+
+    # Guardar PDF
+    pdf_output = "reporte_robustez.pdf"
+    pdf.output(pdf_output)
+
+    # Crear enlace de descarga
+    with open(pdf_output, "rb") as f:
+        pdf_bytes = f.read()
+        b64 = base64.b64encode(pdf_bytes).decode()
+        href = f'<a href="data:application/octet-stream;base64,{b64}" download="{pdf_output}">Descargar Reporte</a>'
+        st.markdown(href, unsafe_allow_html=True)
 
 def evaluar_robustez(datos):
     """Evalúa la robustez del método mediante análisis estadístico avanzado."""
