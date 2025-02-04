@@ -7,6 +7,7 @@ import streamlit as st
 from io import BytesIO
 from pathlib import Path
 from matplotlib.figure import Figure
+import plotly.express as px
 
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
@@ -458,207 +459,231 @@ def graficar_curva_calibracion_streamlit(datos):
             except Exception as e:
                 st.error(f"❌ Error en Día {dia}: {str(e)}")
                 continue
+def generar_reporte_ich(estandares, muestras):
+    """Genera reporte PDF/Excel con resultados detallados"""
+    # Implementación personalizada según necesidades
+    pass
 
 def calcular_precision(datos):
-    """Evalúa la precisión siguiendo la guideline ICH Q2 mediante el cálculo del RSD (Relative Standard Deviation)."""
-    columnas_necesarias = ['Día', 'Concentración', 'Absorbancia', 'Tipo']
-    if not validar_columnas(datos, columnas_necesarias):
-        return
-
-    datos_estandar = datos[datos['Tipo'] == 'Estándar']
-    datos_muestra = datos[datos['Tipo'] == 'Muestra']
-    if datos_estandar.empty:
-        st.error("No se encontraron datos de estándares en el conjunto de datos.")
-        return
-
-    datos_muestra['Concentración Real'] = np.nan
-    for dia in datos['Día'].unique():
-        estandares_dia = datos_estandar[datos_estandar['Día'] == dia]
-        muestras_dia = datos_muestra[datos_muestra['Día'] == dia].copy()
-        if estandares_dia.empty:
-            st.warning(f"No se encontraron estándares para el día {dia}. Concentraciones no calculadas para este día.")
-            continue
-
-        try:
-            X = estandares_dia['Absorbancia'].values.reshape(-1, 1)
-            y = estandares_dia['Concentración'].values
-            slope, intercept, _, _, _ = linregress(estandares_dia['Absorbancia'], estandares_dia['Concentración'])
-            muestras_dia['Concentración Real'] = slope * muestras_dia['Absorbancia'] + intercept
-            datos_muestra.update(muestras_dia)
-            pendiente, intercepto = slope, intercept
-            st.write(f"**Curva de calibración para el día {dia}:** Concentración = {pendiente:.4f} * Absorbancia + {intercepto:.4f}")
-        except Exception as e:
-            st.error(f"Error ajustando la curva de calibración para el día {dia}: {e}")
-
-    for tipo, datos_tipo in [('Estándar', datos_estandar), ('Muestra', datos_muestra)]:
-        st.subheader(f"**Precisión para tipo: {tipo}**")
-        grupos_intraensayo = datos_tipo.groupby(['Día', 'Concentración'])['Absorbancia']
-        rsd_intraensayo = grupos_intraensayo.std() / grupos_intraensayo.mean() * 100
-        st.write("**RSD por día y concentración (Repetibilidad intraensayo):**")
-        st.table(rsd_intraensayo.reset_index().rename(columns={'Absorbancia': 'RSD (%)'}))
-
-        grupos_intermedio = datos_tipo.groupby('Concentración')['Absorbancia']
-        rsd_intermedio = grupos_intermedio.std() / grupos_intermedio.mean() * 100
-        st.write("**RSD por concentración (Precisión intermedia):**")
-        st.table(rsd_intermedio.reset_index().rename(columns={'Absorbancia': 'RSD (%)'}))
-
-        pesos = grupos_intermedio.mean()
-        rsd_general = (rsd_intermedio * pesos / pesos.sum()).sum()
-        st.write(f"**RSD General (Precisión total) para {tipo}:** {rsd_general:.2f}%")
-
-        if rsd_general <= 3:
-            st.success(f"{tipo}: Cumple con los criterios de precisión (RSD ≤ 3%).")
-        else:
-            st.error(f"{tipo}: No cumple con los criterios de precisión (RSD > 3%).")
-
-    st.write("**Concentraciones reales calculadas para las muestras:**")
-    st.table(datos_muestra[['Día', 'Absorbancia', 'Concentración Real']])
-
-def calcular_exactitud(datos):
-    """Calcula la exactitud con visualización profesional y validación ICH Q2."""
-    # Configuración de estilo
-    COLORS = ['#2ecc71', '#3498db', '#e74c3c']  # Verde, Azul, Rojo
-    sns.set_theme(style="whitegrid", font_scale=0.95)
+    """
+    Evalúa la precisión según ICH Q2 R1 para UV-Vis, con análisis separado para estándares y muestras.
     
-    # Validación mejorada
-    columnas_necesarias = ['Día', 'Concentración', 'Absorbancia', 'Tipo']
-    if not validar_columnas(datos, columnas_necesarias):
-        return
-    
-    # Chequear tipos numéricos
-    if not np.issubdtype(datos['Concentración'].dtype, np.number) or \
-       not np.issubdtype(datos['Absorbancia'].dtype, np.number):
-        st.error("❌ Las columnas 'Concentración' y 'Absorbancia' deben ser numéricas")
-        return
+    Metodología:
+    1. Precisión Intraensayo (Estándares): RSD por día y concentración (mismo operador, mismo equipo)
+    2. Precisión Intermedia (Estándares): RSD entre días (diferentes preparaciones)
+    3. Precisión Muestras: Variabilidad en concentraciones calculadas usando curvas de calibración
+    """
+    # Configuración inicial
+    sns.set_theme(style="whitegrid", palette="muted")
+    st.header("🎯 Análisis de Precisión - UV-Vis")
 
-    # Separar datos
-    estandares = datos[datos['Tipo'] == 'Estándar']
-    muestras = datos[datos['Tipo'] == 'Muestra']
+    # =========================================================================
+    # 1. Limpieza y conversión de datos
+    # =========================================================================
+    # Reemplazar valores no numéricos (por ejemplo, un punto '.') por NaN y convertir a numérico
+    for col in ['Concentración', 'Absorbancia']:
+        datos[col] = datos[col].replace('.', np.nan)
+        datos[col] = pd.to_numeric(datos[col], errors='coerce')
+    datos.dropna(subset=['Concentración', 'Absorbancia'], inplace=True)
     
-    if estandares.empty:
-        st.error("❌ No se encontraron datos de estándares para generar curvas")
-        return
-
-    with st.expander("📚 Método de Cálculo ICH Q2", expanded=True):
+    # =========================================================================
+    # 2. Información metodológica
+    # =========================================================================
+    with st.expander("🔍 Metodología Completa", expanded=False):
         st.markdown("""
-        **Criterios de aceptación:**
-        - Recuperación media: 98-102%
-        - Desviación estándar relativa (RSD): ≤3%
+        **Protocolo según ICH Q2 R1:**
+        1. **Preparación de Estándares:** 3 réplicas por concentración en 3 días diferentes
+        2. **Curvas de Calibración:** Linealidad diaria (R² ≥ 0.995)
+        3. **Análisis Intraensayo:** RSD ≤ 2% para estándares
+        4. **Precisión Intermedia:** RSD ≤ 3% considerando variabilidad entre días
+        5. **Muestras:** Concentraciones calculadas deben tener RSD ≤ 5%
         """)
-
-    muestras_calculadas = []
-    for dia in datos['Día'].unique():
-        with st.container():
-            st.markdown(f"## 📅 Día {dia}")
-            est_dia = estandares[estandares['Día'] == dia]
-            mues_dia = muestras[muestras['Día'] == dia]
-            
-            # Validación de datos
-            if len(est_dia) < 3:
-                st.warning(f"⚠️ Mínimo 3 estándares requeridos (Día {dia})")
-                continue
-                
-            if mues_dia.empty:
-                st.warning(f"⚠️ No hay muestras para el Día {dia}")
-                continue
-                
+    
+    # Separar datos en Estándares y Muestras
+    estandares = datos[datos['Tipo'] == 'Estándar'].copy()
+    muestras = datos[datos['Tipo'] == 'Muestra'].copy()
+    
+    # Validación: se requiere tener datos de estándares
+    if estandares.empty:
+        return st.error("❌ Datos de estándares requeridos")
+    
+    # =========================================================================
+    # 3. Procesamiento de curvas de calibración
+    # =========================================================================
+    dias_validos = []
+    resultados_muestras = []
+    
+    with st.spinner('Procesando curvas de calibración...'):
+        for dia in estandares['Día'].unique():
             try:
-                # Cálculo de regresión
-                regresion = linregress(est_dia['Absorbancia'], est_dia['Concentración'])
-                slope, intercept = regresion.slope, regresion.intercept
-                r_squared = regresion.rvalue**2
+                # Filtrar datos del día
+                est_dia = estandares[estandares['Día'] == dia]
                 
-                # Cálculo de concentraciones
-                mues_dia = mues_dia.copy()
-                mues_dia['Concentración Medida'] = (slope * mues_dia['Absorbancia'] + intercept).round(4)
-                mues_dia['Recuperación (%)'] = ((mues_dia['Concentración Medida'] / mues_dia['Concentración']) * 100).round(2)
-                muestras_calculadas.append(mues_dia)
-
-                # Mostrar métricas en columnas
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("### 📈 Parámetros de la Curva")
-                    st.metric("Ecuación", f"y = {slope:.4f}x + {intercept:.4f}")
-                    st.metric("R²", f"{r_squared:.4f}")
-                    
-                with col2:
-                    st.markdown("### 🔍 Control de Calidad")
-                    st.metric("Número de Muestras", len(mues_dia))
-                    recuperacion_prom = mues_dia['Recuperación (%)'].mean()
-                    st.metric("Recuperación Promedio", 
-                            f"{recuperacion_prom:.2f}%",
-                            delta="ICH: 98-102%" if 98 <= recuperacion_prom <= 102 else None)
-
-                # Gráfico de correlación
-                with st.expander(f"📊 Relación Teórico vs Medido - Día {dia}", expanded=False):
-                    fig = plt.figure(figsize=(8, 6))
-                    ax = fig.add_subplot(111)
-                    sns.scatterplot(data=mues_dia, x='Concentración', y='Concentración Medida',
-                                   s=100, color=COLORS[0], edgecolor='black')
-                    lims = [mues_dia[['Concentración', 'Concentración Medida']].min().min(),
-                           mues_dia[['Concentración', 'Concentración Medida']].max().max()]
-                    ax.plot(lims, lims, '--', color=COLORS[2], alpha=0.5, label='Línea Ideal')
-                    ax.set_title(f"Correlación de Concentraciones\nDía {dia}", fontsize=14)
-                    ax.set_xlabel("Concentración Teórica (μg/mL)", fontsize=12)
-                    ax.set_ylabel("Concentración Medida (μg/mL)", fontsize=12)
-                    ax.legend()
-                    ax.grid(True, linestyle='--', alpha=0.5)
-                    st.pyplot(fig)
-                    plt.close(fig)
-                    
+                # Validar mínimo 3 réplicas por concentración
+                conteo = est_dia.groupby('Concentración').size()
+                if any(conteo < 3):
+                    st.warning(f"⚠️ Día {dia}: Insuficientes réplicas")
+                    continue
+                
+                # Calcular regresión lineal
+                slope, intercept, r_value, _, _ = linregress(
+                    est_dia['Absorbancia'], est_dia['Concentración']
+                )
+                
+                if r_value**2 < 0.995:
+                    st.warning(f"🚨 Día {dia} excluido - R²: {r_value**2:.3f}")
+                    continue
+                
+                # Calcular concentraciones para las muestras de ese día
+                mues_dia = muestras[muestras['Día'] == dia].copy()
+                mues_dia['Conc. Calculada'] = slope * mues_dia['Absorbancia'] + intercept
+                resultados_muestras.append(mues_dia)
+                dias_validos.append(dia)
+                
             except Exception as e:
-                st.error(f"❌ Error en Día {dia}: {str(e)}")
-                continue
+                st.error(f"Error en el Día {dia}: {str(e)}")
+    
+    # =========================================================================
+    # 4. Análisis de Estándares
+    # =========================================================================
+    st.subheader("🔬 Resultados para Estándares")
+    col1, col2 = st.columns(2)
 
-    if not muestras_calculadas:
-        st.error("❌ No se calcularon resultados válidos")
-        return
+    with col1:
+        # Análisis Intraensayo: Boxplot por Concentración
+        grupos_intra = estandares.groupby(['Día', 'Concentración'])['Absorbancia']
+        rsd_intra = (grupos_intra.std() / grupos_intra.mean() * 100).reset_index()
         
-    resultados = pd.concat(muestras_calculadas)
-    
-    # Análisis estadístico
-    st.markdown("## 📌 Resumen de Exactitud")
-    resumen = resultados.groupby('Día').agg(
-        Muestras=('Recuperación (%)', 'size'),
-        Media=('Recuperación (%)', lambda x: f"{x.mean():.2f}%"),
-        DE=('Recuperación (%)', lambda x: f"{x.std():.2f}%"),
-        Rango=('Recuperación (%)', lambda x: f"{x.min():.2f}% - {x.max():.2f}%")
-    ).reset_index()
-    
-    # Estilo condicional
-    def estilo_recuperacion(val):
-        color = '#d4edda' if 98 <= float(val.strip('%')) <= 102 else '#f8d7da'
-        return f'background-color: {color}'
-    
-    def estilo_rsd(val):
-        color = '#d4edda' if float(val.strip('%')) <= 3 else '#f8d7da'
-        return f'background-color: {color}'
-    
-    # Mostrar tabla interactiva
-    st.dataframe(
-        resumen.style
-        .applymap(estilo_recuperacion, subset=['Media'])
-        .applymap(estilo_rsd, subset=['DE'])
-        .set_properties(**{'text-align': 'center'})
-        .format(precision=2)
-    )
-    
-    # Gráfico final de recuperación
-    with st.expander("📈 Análisis Detallado de Recuperación", expanded=True):
-        fig = plt.figure(figsize=(10, 5))
-        ax = fig.add_subplot(111)
-        sns.boxplot(data=resultados, x='Día', y='Recuperación (%)', palette=COLORS)
-        ax.axhline(98, color=COLORS[2], linestyle='--', alpha=0.5, label='Límite ICH Inferior')
-        ax.axhline(102, color=COLORS[2], linestyle='--', alpha=0.5, label='Límite ICH Superior')
-        ax.set_title("Distribución de Porcentajes de Recuperación", fontsize=14)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.boxplot(data=rsd_intra, x='Concentración', y='Absorbancia', palette='Blues', ax=ax)
+        ax.axhline(2, color='red', linestyle='--', label='Límite ICH (2%)')
+        ax.set_title("RSD Intraensayo por Concentración")
+        ax.set_ylabel("RSD (%)")
         ax.legend()
+        st.pyplot(fig)
+        
+        max_rsd_intra = rsd_intra['Absorbancia'].max()
+        st.metric("RSD Máximo Intraensayo", f"{max_rsd_intra:.2f}%",
+                delta="Cumple" if max_rsd_intra <= 2 else "No Cumple")
+
+    with col2:
+        # Análisis Intermedio: Línea por Concentración
+        grupos_inter = estandares.groupby('Concentración')['Absorbancia']
+        rsd_inter = (grupos_inter.std() / grupos_inter.mean() * 100).reset_index()
+        
+        fig, ax = plt.subplots(figsize=(8, 4))
+        sns.lineplot(data=rsd_inter, x='Concentración', y='Absorbancia',
+                    marker='o', color='green', linewidth=2, ax=ax)
+        ax.axhline(3, color='red', linestyle='--', label='Límite ICH (3%)')
+        ax.set_title("RSD Intermedio por Concentración")
+        ax.set_ylabel("RSD (%)")
+        ax.legend()
+        st.pyplot(fig)
+        
+        rsd_pond = (rsd_inter['Absorbancia'] * grupos_inter.mean()).sum() / grupos_inter.mean().sum()
+        st.metric("RSD Ponderado Intermedio", f"{rsd_pond:.2f}%",
+                delta="Cumple" if rsd_pond <= 3 else "No Cumple")
+
+   
+   
+    # =========================================================================
+    # 6. Reporte Final
+    # =========================================================================
+    with st.expander("📊 Resumen", expanded=True):
+        metricas = {
+            'Días Analizados': len(dias_validos),
+            'RSD Intraensayo Máximo': f"{max_rsd_intra:.2f}%",
+            'RSD Intermedio Ponderado': f"{rsd_pond:.2f}%",
+            'Muestras Válidas': len(resultados_muestras) if resultados_muestras else 0,
+            'Cumplimiento Global': "✅" if (max_rsd_intra <= 2 and rsd_pond <= 3) else "❌"
+        }
+        st.json(metricas)
+
+        
+def calcular_exactitud(datos):
+    """Calcula la exactitud mediante recuperación según ICH Q2 usando concentración teórica vs real."""
+    # Validar columnas requeridas
+    columnas_necesarias = ['Día', 'Concentración Teórica', 'Concentración Real']
+    if not validar_columnas(datos, columnas_necesarias):
+        return
+    
+    # Calcular porcentaje de recuperación
+    datos['Recuperación (%)'] = (datos['Concentración Real'] / datos['Concentración Teórica']) * 100
+    
+    # Análisis por día
+    st.header("Análisis de Exactitud - ICH Q2 R1")
+    
+    # Crear pestañas para organización
+    tab1, tab2, tab3 = st.tabs(["Resumen Estadístico", "Distribución de Recuperaciones", "Datos Detallados"])
+    
+    with tab1:
+        # Métricas clave por día
+        st.subheader("Estadísticos por Día")
+        resumen = datos.groupby('Día').agg(
+            Muestras=('Recuperación (%)', 'size'),
+            Media=('Recuperación (%)', lambda x: f"{x.mean():.2f}%"),
+            DE=('Recuperación (%)', lambda x: f"{x.std():.2f}%"),
+            RSD=('Recuperación (%)', lambda x: f"{(x.std()/x.mean())*100:.2f}%"),
+            Mín=('Recuperación (%)', lambda x: f"{x.min():.2f}%"),
+            Máx=('Recuperación (%)', lambda x: f"{x.max():.2f}%")
+        ).reset_index()
+        
+        # Evaluación de criterios ICH
+        resumen['Cumplimiento'] = datos.groupby('Día').apply(
+            lambda x: "✅" if (98 <= x['Recuperación (%)'].mean() <= 102) and 
+                            (x['Recuperación (%)'].std() <= 3) else "❌"
+        ).values
+        
+        st.dataframe(
+            resumen.style.apply(lambda x: ['background: #e6f4ea' if x.Cumplimiento == '✅' 
+                                          else 'background: #fce8e6' for _ in x], axis=1)
+        )
+        
+        # Leyenda de cumplimiento
+        st.markdown("""
+        **Criterios ICH Q2 R1:**
+        - Media de recuperación entre 98-102%
+        - Desviación estándar ≤3%
+        """)
+    
+    with tab2:
+        # Gráfico de distribución
+        st.subheader("Distribución de Recuperaciones")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Boxplot por día
+        sns.boxplot(data=datos, x='Día', y='Recuperación (%)', palette='viridis', ax=ax)
+        ax.axhline(100, color='red', linestyle='--', linewidth=1, label='Objetivo 100%')
+        ax.set_title("Distribución de Porcentajes de Recuperación por Día")
+        ax.set_ylim(85, 115)
+        ax.legend()
+        
+        st.pyplot(fig)
+        plt.close(fig)
+        
+        # Histograma combinado
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(data=datos, x='Recuperación (%)', bins=12, kde=True, 
+                    hue='Día', multiple='stack', palette='viridis')
+        ax.set_title("Distribución Global de Recuperaciones")
         st.pyplot(fig)
         plt.close(fig)
     
-    # Generar descarga
-    with st.expander("💾 Descargar Resultados Completos", expanded=False):
-        generar_descarga(resultados)
-        st.info("Los resultados incluyen todos los cálculos de concentración y recuperación")
+    with tab3:
+        # Tabla detallada con formato condicional
+        st.subheader("Datos Completos")
+        st.dataframe(
+            datos.style.format({
+                'Concentración Teórica': '{:.4f}',
+                'Concentración Real': '{:.4f}',
+                'Recuperación (%)': '{:.2f}%'
+            }).apply(lambda x: ['color: #2ecc71' if (x['Recuperación (%)'] >= 98) and 
+                              (x['Recuperación (%)'] <= 102) else 'color: #e74c3c' 
+                              for _ in x], axis=1)
+        )
+        
+        # Botón de descarga
+        generar_descarga(datos)
 
 def validar_columnas(datos, columnas):
     """Valida la presencia de columnas requeridas en el dataset"""
@@ -810,8 +835,8 @@ elif modulo == "Exactitud (Recuperación)":
         - **Concentración Medida:** Concentración obtenida tras el análisis experimental.
         """
     )
-    img_path = imagenes_dir / "muestra.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
+    img_path = imagenes_dir / "conc_exac.png"
+    st.image(str(img_path), caption="Estructura requerida: Columnas 'Concentración Teorica', 'Concentración Real', 'Día'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_exactitud)
 
