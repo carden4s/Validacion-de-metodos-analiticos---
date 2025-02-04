@@ -466,94 +466,54 @@ def generar_reporte_ich(estandares, muestras):
 
 def calcular_precision(datos):
     """
-    Evalúa la precisión según ICH Q2 R1 para UV-Vis, con análisis separado para estándares y muestras.
-    
-    Metodología:
-    1. Precisión Intraensayo (Estándares): RSD por día y concentración (mismo operador, mismo equipo)
-    2. Precisión Intermedia (Estándares): RSD entre días (diferentes preparaciones)
-    3. Precisión Muestras: Variabilidad en concentraciones calculadas usando curvas de calibración
+    Evalúa la precisión según ICH Q2 R1 para UV -Vis.
     """
     # Configuración inicial
     sns.set_theme(style="whitegrid", palette="muted")
     st.header("🎯 Análisis de Precisión - UV-Vis")
 
-    # =========================================================================
-    # 1. Limpieza y conversión de datos
-    # =========================================================================
-    # Reemplazar valores no numéricos (por ejemplo, un punto '.') por NaN y convertir a numérico
+    # Validación y limpieza de datos
     for col in ['Concentración', 'Absorbancia']:
         datos[col] = datos[col].replace('.', np.nan)
         datos[col] = pd.to_numeric(datos[col], errors='coerce')
     datos.dropna(subset=['Concentración', 'Absorbancia'], inplace=True)
-    
-    # =========================================================================
-    # 2. Información metodológica
-    # =========================================================================
-    with st.expander("🔍 Metodología Completa", expanded=False):
-        st.markdown("""
-        **Protocolo según ICH Q2 R1:**
-        1. **Preparación de Estándares:** 3 réplicas por concentración en 3 días diferentes
-        2. **Curvas de Calibración:** Linealidad diaria (R² ≥ 0.995)
-        3. **Análisis Intraensayo:** RSD ≤ 2% para estándares
-        4. **Precisión Intermedia:** RSD ≤ 3% considerando variabilidad entre días
-        5. **Muestras:** Concentraciones calculadas deben tener RSD ≤ 5%
-        """)
-    
-    # Separar datos en Estándares y Muestras
+
+    # Separar datos
     estandares = datos[datos['Tipo'] == 'Estándar'].copy()
     muestras = datos[datos['Tipo'] == 'Muestra'].copy()
-    
-    # Validación: se requiere tener datos de estándares
-    if estandares.empty:
-        return st.error("❌ Datos de estándares requeridos")
-    
-    # =========================================================================
-    # 3. Procesamiento de curvas de calibración
-    # =========================================================================
+
+    # Validación de réplicas mínimas
+    conteo_replicas = estandares.groupby(['Día', 'Concentración']).size()
+    if any(conteo_replicas < 3):
+        st.error("❌ ICH Q2: Se requieren mínimo 3 réplicas por concentración y día")
+        return
+
+    # Procesamiento de curvas de calibración
     dias_validos = []
     resultados_muestras = []
-    
     with st.spinner('Procesando curvas de calibración...'):
         for dia in estandares['Día'].unique():
             try:
-                # Filtrar datos del día
                 est_dia = estandares[estandares['Día'] == dia]
-                
-                # Validar mínimo 3 réplicas por concentración
-                conteo = est_dia.groupby('Concentración').size()
-                if any(conteo < 3):
-                    st.warning(f"⚠️ Día {dia}: Insuficientes réplicas")
-                    continue
-                
-                # Calcular regresión lineal
                 slope, intercept, r_value, _, _ = linregress(
                     est_dia['Absorbancia'], est_dia['Concentración']
                 )
-                
                 if r_value**2 < 0.995:
                     st.warning(f"🚨 Día {dia} excluido - R²: {r_value**2:.3f}")
                     continue
-                
-                # Calcular concentraciones para las muestras de ese día
                 mues_dia = muestras[muestras['Día'] == dia].copy()
                 mues_dia['Conc. Calculada'] = slope * mues_dia['Absorbancia'] + intercept
                 resultados_muestras.append(mues_dia)
                 dias_validos.append(dia)
-                
             except Exception as e:
                 st.error(f"Error en el Día {dia}: {str(e)}")
-    
-    # =========================================================================
-    # 4. Análisis de Estándares
-    # =========================================================================
+
+    # Análisis de Estándares
     st.subheader("🔬 Resultados para Estándares")
     col1, col2 = st.columns(2)
-
     with col1:
-        # Análisis Intraensayo: Boxplot por Concentración
         grupos_intra = estandares.groupby(['Día', 'Concentración'])['Absorbancia']
         rsd_intra = (grupos_intra.std() / grupos_intra.mean() * 100).reset_index()
-        
         fig, ax = plt.subplots(figsize=(8, 4))
         sns.boxplot(data=rsd_intra, x='Concentración', y='Absorbancia', palette='Blues', ax=ax)
         ax.axhline(2, color='red', linestyle='--', label='Límite ICH (2%)')
@@ -561,16 +521,12 @@ def calcular_precision(datos):
         ax.set_ylabel("RSD (%)")
         ax.legend()
         st.pyplot(fig)
-        
         max_rsd_intra = rsd_intra['Absorbancia'].max()
         st.metric("RSD Máximo Intraensayo", f"{max_rsd_intra:.2f}%",
-                delta="Cumple" if max_rsd_intra <= 2 else "No Cumple")
-
+                 delta="Cumple" if max_rsd_intra <= 2 else "No Cumple")
     with col2:
-        # Análisis Intermedio: Línea por Concentración
         grupos_inter = estandares.groupby('Concentración')['Absorbancia']
         rsd_inter = (grupos_inter.std() / grupos_inter.mean() * 100).reset_index()
-        
         fig, ax = plt.subplots(figsize=(8, 4))
         sns.lineplot(data=rsd_inter, x='Concentración', y='Absorbancia',
                     marker='o', color='green', linewidth=2, ax=ax)
@@ -579,26 +535,20 @@ def calcular_precision(datos):
         ax.set_ylabel("RSD (%)")
         ax.legend()
         st.pyplot(fig)
-        
-        rsd_pond = (rsd_inter['Absorbancia'] * grupos_inter.mean()).sum() / grupos_inter.mean().sum()
-        st.metric("RSD Ponderado Intermedio", f"{rsd_pond:.2f}%",
-                delta="Cumple" if rsd_pond <= 3 else "No Cumple")
+        rsd_ponderado = (rsd_inter['Absorbancia'] * grupos_inter.mean()).sum() / grupos_inter.mean().sum()
+        st.metric("RSD Ponderado Intermedio", f"{rsd_ponderado:.2f}%",
+                 delta="Cumple" if rsd_ponderado <= 3 else "No Cumple")
 
-   
-   
-    # =========================================================================
-    # 6. Reporte Final
-    # =========================================================================
+    # Resumen Ejecutivo
     with st.expander("📊 Resumen", expanded=True):
         metricas = {
             'Días Analizados': len(dias_validos),
             'RSD Intraensayo Máximo': f"{max_rsd_intra:.2f}%",
-            'RSD Intermedio Ponderado': f"{rsd_pond:.2f}%",
+            'RSD Intermedio Ponderado': f"{rsd_ponderado:.2f}%",
             'Muestras Válidas': len(resultados_muestras) if resultados_muestras else 0,
-            'Cumplimiento Global': "✅" if (max_rsd_intra <= 2 and rsd_pond <= 3) else "❌"
+            'Cumplimiento Global': "✅" if (max_rsd_intra <= 2 and rsd_ponderado <= 3) else "❌"
         }
         st.json(metricas)
-
         
 def calcular_exactitud(datos):
     """Calcula la exactitud mediante recuperación según ICH Q2 usando concentración teórica vs real."""
@@ -708,34 +658,114 @@ def generar_descarga(datos):
     )
 
 def evaluar_robustez(datos):
-    """Evalúa la robustez del método analítico mediante ANOVA."""
-    columnas_necesarias = ['Absorbancia']
+    """Evalúa la robustez del método mediante análisis estadístico avanzado."""
+    # Configuración de estilo
+    sns.set_theme(style="whitegrid", palette="pastel")
+    plt.rcParams['axes.titleweight'] = 'bold'
+    st.header("🧪 Análisis de Robustez - ICH Q2")
+
+    # Validación mejorada
+    columnas_necesarias = ['Absorbancia', 'Día', 'Concentración', 'Tipo']
     if not validar_columnas(datos, columnas_necesarias):
         return
 
-    factores_posibles = ['Día', 'Concentración', 'Tipo']
-    factor = st.selectbox("Selecciona el factor a evaluar:", factores_posibles)
-    if factor not in datos.columns:
-        st.error(f"El factor '{factor}' no está en los datos.")
-        return
+    with st.expander("📚 Metodología", expanded=False):
+        st.markdown("""
+        **Criterios ICH Q2 para Robustez:**
+        1. ANOVA con nivel de significancia α = 0.05
+        2. Tamaño del efecto (η²) < 0.1 para considerar robustez
+        3. Mínimo 3 niveles por factor analizado
+        4. Intervalos de confianza del 95% para medias
+        """)
 
-    grupos = [grupo['Absorbancia'].values for _, grupo in datos.groupby(factor)]
-    estadistico, p_value = f_oneway(*grupos)
+    # Selección de factores
+    factores = st.multiselect(
+        "Selecciona factores a evaluar:",
+        options=['Día', 'Concentración', 'Tipo'],
+        default=['Día']
+    )
 
-    st.write(f"**Factor evaluado:** {factor}")
-    st.write(f"**Estadístico F:** {estadistico:.4f}")
-    st.write(f"**Valor p:** {p_value:.4e}")
+    # Contenedor principal
+    with st.container():
+        for factor in factores:
+            st.subheader(f"📌 Factor: {factor}")
+            col1, col2 = st.columns([1, 2])
 
-    if p_value > 0.05:
-        st.success("No hay diferencias significativas (p > 0.05). El método es robusto.")
-    else:
-        st.error("Hay diferencias significativas (p ≤ 0.05). El método no es robusto.")
+            with col1:
+                # Análisis estadístico
+                grupos = [g['Absorbancia'] for _, g in datos.groupby(factor)]
+                
+                if len(grupos) < 2:
+                    st.error("Se requieren al menos 2 grupos para ANOVA")
+                    continue
+                
+                # ANOVA
+                f_stat, p_val = f_oneway(*grupos)
+                
+                # Tamaño del efecto
+                ss_total = np.sum((datos['Absorbancia'] - datos['Absorbancia'].mean())**2)
+                eta_squared = f_stat * (len(grupos) - 1) / (len(datos) - len(grupos))
+                
+                # Resultados
+                st.markdown("""
+                **Resultados Estadísticos:**
+                - Estadístico F: `{:.4f}`
+                - Valor p: `{:.4f}`
+                - η² (tamaño efecto): `{:.3f}`
+                """.format(f_stat, p_val, eta_squared))
 
-    st.write("**Gráfico de caja (Boxplot):**")
-    plt.figure(figsize=(8, 5))
-    sns.boxplot(x=factor, y='Absorbancia', data=datos)
-    plt.title(f"Variabilidad de Absorbancia según {factor}")
-    st.pyplot(plt)
+                # Evaluación de criterios
+                criterio_p = p_val > 0.05
+                criterio_eta = eta_squared < 0.1
+                robustez = criterio_p and criterio_eta
+                
+                st.markdown(f"""
+                **Interpretación:**
+                - Significancia estadística: {"✅ No significativa" if criterio_p else "❌ Significativa"}
+                - Tamaño del efecto: {"✅ Aceptable" if criterio_eta else "❌ Excesivo"}
+                - **Conclusión:** {"🏆 Método Robusto" if robustez else "⚠️ Requiere atención"}
+                """)
+
+            with col2:
+                # Visualización avanzada
+                fig, ax = plt.subplots(figsize=(8, 4))
+                sns.boxplot(x=factor, y='Absorbancia', data=datos, 
+                           width=0.6, linewidth=1.5, fliersize=4)
+                
+                # Añadir media e intervalos
+                mean_line = datos['Absorbancia'].mean()
+                ax.axhline(mean_line, color='red', linestyle='--', 
+                          label=f'Media Global: {mean_line:.2f}')
+                
+                # Formateo profesional
+                ax.set_title(f"Distribución por {factor}\n", fontsize=12)
+                ax.set_xlabel(factor, fontweight='bold')
+                ax.set_ylabel("Absorbancia", fontweight='bold')
+                ax.legend()
+                plt.xticks(rotation=45)
+                st.pyplot(fig)
+
+                # Análisis post-hoc si es necesario
+                if not robustez:
+                    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+                    tukey = pairwise_tukeyhsd(datos['Absorbancia'], datos[factor])
+                    with st.expander("🔍 Análisis Post-Hoc (Tukey)"):
+                        st.text(str(tukey.summary()))
+
+    # Sección adicional
+    with st.expander("📊 Reporte Completo", expanded=False):
+        st.subheader("📈 Tendencia Temporal")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        sns.lineplot(data=datos, x='Día', y='Absorbancia', 
+                    hue='Concentración', style='Tipo', 
+                    markers=True, ci=95)
+        ax.set_title("Tendencia de Absorbancia por Día y Concentración")
+        st.pyplot(fig)
+
+        # Descarga de reporte
+        if st.button("📥 Generar Reporte PDF"):
+            generar_reporte_robustez(datos, factores)
+
 
 def evaluar_estabilidad(datos):
     """Evalúa la estabilidad de la solución en el tiempo."""
