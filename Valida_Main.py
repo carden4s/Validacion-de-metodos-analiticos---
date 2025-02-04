@@ -115,19 +115,7 @@ def validar_columnas(datos, columnas_necesarias):
         return False
     return True
 
-def calcular_regresion(datos_dia):
-    """Calcula la regresión lineal y los parámetros LOD y LOQ."""
-    x, y = datos_dia['Concentración'], datos_dia['Absorbancia']
-    if len(x) < 2 or len(y) < 2:
-        st.error("No hay suficientes datos para realizar la regresión. Se requieren al menos 2 puntos.")
-        return None, None, None, None, None
-    regresion = linregress(x, y)
-    slope, intercept = regresion.slope, regresion.intercept
-    residuals = y - (slope * x + intercept)
-    std_dev = residuals.std()
-    lod = (3.3 * std_dev) / slope if slope != 0 else None
-    loq = (10 * std_dev) / slope if slope != 0 else None
-    return slope, intercept, lod, loq, std_dev
+
 
 
 def calcular_linealidad(datos):
@@ -819,6 +807,7 @@ if modulo == "Linealidad y Rango":
     
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, calcular_linealidad)
+    
 
 # Módulo de LOD y LOQ
 elif modulo == "Límites de Detección y Cuantificación":
