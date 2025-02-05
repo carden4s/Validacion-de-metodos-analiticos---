@@ -758,126 +758,164 @@ def evaluar_estabilidad(datos):
     """
     Evalúa la estabilidad de soluciones por día según ICH Q2 R1 para UV-Vis
     """
+    # Configuración inicial
+    st.header("📊 Análisis de Estabilidad UV-Vis")
+    sns.set_theme(style="whitegrid", palette="muted")
+    
     # Validación de columnas
-    columnas_requeridas = ['Día', 'Concentración', 'Tipo', 'Absorbancia']
-    if not all(col in datos.columns for col in columnas_requeridas):
-        st.error("❌ Error: El archivo no tiene las columnas requeridas")
+    required_cols = ['Día', 'Concentración', 'Absorbancia', 'Tipo']
+    if not all(col in datos.columns for col in required_cols):
+        st.error(f"❌ Faltan columnas requeridas: {', '.join(required_cols)}")
         return
 
     try:
-        # Preprocesamiento con validación
-        df = datos.copy().dropna(subset=columnas_requeridas)
-        if df.empty:
-            st.error("⚠️ Archivo vacío después de limpieza")
-            return
-            
-        # Conversión numérica segura
-        for col in ['Día', 'Concentración', 'Absorbancia']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Copia del dataframe original
+        df = datos.copy()
         
-        df.dropna(subset=columnas_requeridas, inplace=True)
-        if df.empty:
-            st.error("🚨 Datos no numéricos en columnas clave")
-            return
+        # ============================================
+        # 1. Preprocesamiento de datos
+        # ============================================
+        with st.expander("🧹 Preprocesamiento de datos", expanded=False):
+            # Convertir fecha
+            df['Día'] = pd.to_datetime(df['Día'], format='%d/%m/%Y', errors='coerce')
+            
+            # Detectar fechas inválidas
+            invalid_dates = df[df['Día'].isna()]
+            if not invalid_dates.empty:
+                st.error("⚠️ Fechas inválidas detectadas:")
+                st.dataframe(invalid_dates)
+                return
+            
+            # Convertir a días numéricos (días desde la primera medición)
+            df['Día_num'] = (df['Día'] - df['Día'].min()).dt.days + 1
+            
+            # Convertir columnas numéricas
+            numeric_cols = ['Concentración', 'Absorbancia']
+            for col in numeric_cols:
+                df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
+            
+            # Validar valores numéricos
+            non_numeric = df[df[numeric_cols].isna().any(axis=1)]
+            if not non_numeric.empty:
+                st.error("❌ Valores no numéricos detectados:")
+                st.dataframe(non_numeric)
+                return
+            
+            st.success("✅ Datos preprocesados correctamente")
+            st.dataframe(df.head(), hide_index=True)
 
-        # Separar datos con verificación
+        # ============================================
+        # 2. Análisis de Estándares
+        # ============================================
         estandares = df[df['Tipo'] == 'Estándar']
+        
+        with st.expander("🔬 Análisis de Estándares", expanded=True):
+            if not estandares.empty:
+                # ANOVA entre días
+                grupos_anova = [grupo['Absorbancia'] for _, grupo in estandares.groupby('Día_num')]
+                if len(grupos_anova) > 1:
+                    f_val, p_val = f_oneway(*grupos_anova)
+                else:
+                    p_val = 1.0  # Si solo hay un día
+                
+                # Cálculo de RSD
+                rsd_data = estandares.groupby(['Día_num', 'Concentración'])['Absorbancia'].agg(
+                    Media = np.mean,
+                    DE = np.std,
+                    RSD = lambda x: (np.std(x)/np.mean(x))*100 if np.mean(x) != 0 else np.nan
+                ).reset_index()
+
+                # Gráficos
+                col1, col2 = st.columns(2)
+                with col1:
+                    fig1 = plt.figure(figsize=(8,4))
+                    sns.lineplot(data=estandares, x='Día_num', y='Absorbancia', 
+                                hue='Concentración', style='Concentración',
+                                markers=True, dashes=False, ci=95)
+                    plt.title("Tendencia de Absorbancia en Estándares")
+                    plt.xlabel("Días desde inicio")
+                    st.pyplot(fig1)
+                
+                with col2:
+                    fig2 = plt.figure(figsize=(8,4))
+                    sns.boxplot(data=rsd_data, x='Día_num', y='RSD')
+                    plt.axhline(2, color='r', linestyle='--', label='Límite ICH')
+                    plt.title("Variabilidad Inter-Día (RSD %)")
+                    st.pyplot(fig2)
+
+                # Métricas
+                st.metric("RSD Máximo Estándares", 
+                         f"{rsd_data['RSD'].max():.2f}%", 
+                         "Cumple ICH" if rsd_data['RSD'].max() <= 2 else "No cumple")
+                
+                st.metric("ANOVA entre días (p-valor)", 
+                         f"{p_val:.4f}", 
+                         "Estable" if p_val > 0.05 else "Inestable")
+            else:
+                st.warning("No hay datos de estándares para análisis")
+
+        # ============================================
+        # 3. Análisis de Muestras
+        # ============================================
         muestras = df[df['Tipo'] == 'Muestra']
         
-        if estandares.empty:
-            st.warning("⚠️ No hay datos de estándares para análisis")
-        if muestras.empty:
-            st.warning("⚠️ No hay datos de muestras para análisis")
-    except Exception as e:
-        st.error(f"Error crítico: {str(e)}")
-
-        # ============================================
-        # 1. Análisis de Estándares (Mejorado)
-        # ============================================
-        cumplimiento_estandares = None
-        if not estandares.empty:
-            try:
-                grupos_dia = estandares.groupby('Día')['Absorbancia']
-                rsd_inter = (grupos_dia.std() / grupos_dia.mean() * 100)
-                cumplimiento_estandares = rsd_inter.max() <= 2
-            except Exception as e:
-                st.error(f"Error en estándares: {str(e)}")
-    try:
-        # 1. Convertir 'Día' a datetime y luego a días numéricos
-        df['Día'] = pd.to_datetime(df['Día'], 
-                                 format='%d/%m/%Y', 
-                                 errors='coerce')
-        
-        # Detectar fechas inválidas
-        fechas_invalidas = df[df['Día'].isna()]
-        if not fechas_invalidas.empty:
-            st.error("⚠️ Fechas inválidas detectadas. Corrija estas filas:")
-            st.dataframe(fechas_invalidas)
-            return
-            
-        # Convertir a días desde la primera medición (opcional)
-        df['Día_num'] = (df['Día'] - df['Día'].min()).dt.days + 1
-        
-        # 2. Validar formato numérico en otras columnas
-        columnas_numericas = ['Concentración', 'Absorbancia', 'ID Muestra']
-        for col in columnas_numericas:
-            # Reemplazar comas por puntos si existen
-            df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            # Detectar valores no convertibles
-            no_numericos = df[df[col].isna()]
-            if not no_numericos.empty:
-                st.error(f"❌ Valores no numéricos en columna '{col}':")
-                st.dataframe(no_numericos[['Día', col]])
-                return
-                
-        # ============================================
-        # 2. Análisis de Muestras (Mejorado)
-        # ============================================
-        cumplimiento_muestras = None
-        slope = None
-        if not muestras.empty:
-            try:
-                # Cálculo de concentraciones
+        with st.expander("🧪 Análisis de Muestras"):
+            if not muestras.empty:
+                # Calcular concentraciones usando curvas diarias
                 muestras_cal = []
-                for dia in muestras['Día'].unique():
-                    est_dia = estandares[estandares['Día'] == dia]
-                    if len(est_dia) >= 2:
-                        slope, intercept = np.polyfit(est_dia['Concentración'], est_dia['Absorbancia'], 1)
-                        muestras_dia = muestras[muestras['Día'] == dia].copy()
-                        muestras_dia['Conc_Calc'] = (muestras_dia['Absorbancia'] - intercept) / slope
-                        muestras_cal.append(muestras_dia)
+                for dia in muestras['Día_num'].unique():
+                    try:
+                        # Obtener curva del día
+                        est_dia = estandares[estandares['Día_num'] == dia]
+                        
+                        if len(est_dia['Concentración'].unique()) > 1:
+                            slope, intercept, r_value, p_val, _ = linregress(
+                                est_dia['Concentración'], 
+                                est_dia['Absorbancia']
+                            )
+                            
+                            if r_value**2 >= 0.995:
+                                muestras_dia = muestras[muestras['Día_num'] == dia].copy()
+                                muestras_dia['Conc_Calc'] = (muestras_dia['Absorbancia'] - intercept)/slope
+                                muestras_cal.append(muestras_dia)
+                    except Exception as e:
+                        continue
                 
                 if muestras_cal:
                     df_muestras = pd.concat(muestras_cal)
-                    rsd_muestras = (df_muestras.groupby('Día')['Conc_Calc'].std() / 
-                                   df_muestras.groupby('Día')['Conc_Calc'].mean() * 100)
-                    cumplimiento_muestras = rsd_muestras.max() <= 5
-                    slope, _ = np.polyfit(df_muestras['Día'], df_muestras['Conc_Calc'], 1)
-            except Exception as e:
-                st.error(f"Error en muestras: {str(e)}")
-
-        # ============================================
-        # 3. Resumen de Cumplimiento (Modificado)
-        # ============================================
-        st.divider()
-        with st.container():
-            cols = st.columns(3)
-            criterios = {
-                "Estándares": ("✅ Cumple" if cumplimiento_estandares else "❌ No cumple") if cumplimiento_estandares is not None else "Datos insuficientes",
-                "Muestras": ("✅ Cumple" if cumplimiento_muestras else "❌ No cumple") if cumplimiento_muestras is not None else "Datos insuficientes",
-                "Tendencia": ("✅ Estable" if abs(slope) < 0.01 else "❌ Inestable") if slope is not None else "Datos insuficientes"
-            }
-            
-            for (nombre, estado), col in zip(criterios.items(), cols):
-                with col:
-                    st.metric(f"Cumplimiento {nombre}", estado)
+                    
+                    # Gráfico de tendencia
+                    fig = plt.figure(figsize=(10,4))
+                    sns.regplot(data=df_muestras, x='Día_num', y='Conc_Calc',
+                               scatter_kws={'alpha':0.7}, line_kws={'color':'red'})
+                    plt.title("Tendencia de Concentración en Muestras")
+                    plt.xlabel("Días desde inicio")
+                    st.pyplot(fig)
+                    
+                    # Cálculo de RSD
+                    rsd_muestras = (df_muestras.groupby('Día_num')['Conc_Calc'].std() / 
+                                   df_muestras.groupby('Día_num')['Conc_Calc'].mean()) * 100
+                    
+                    # Métricas
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("RSD Máximo Muestras", 
+                                 f"{rsd_muestras.max():.2f}%", 
+                                 "Cumple ICH" if rsd_muestras.max() <= 5 else "No cumple")
+                    with col2:
+                        slope, _ = np.polyfit(df_muestras['Día_num'], df_muestras['Conc_Calc'], 1)
+                        st.metric("Pendiente de Tendencia", 
+                                 f"{slope:.2e}", 
+                                 "Estable" if abs(slope) < 0.01 else "Inestable")
+                else:
+                    st.warning("No hay suficientes datos para calcular concentraciones")
+            else:
+                st.warning("No hay datos de muestras para análisis")
 
     except Exception as e:
-        st.error(f"Error crítico: {str(e)}")
-
-# Lógica principal para cada módulo
+        st.error(f"🚨 Error crítico: {str(e)}")
+        
+        # Lógica principal para cada módulo
 def procesar_archivo(datos, funcion_analisis):
     """Función mejorada para manejar diferentes codificaciones y formatos"""
     if datos is not None:
