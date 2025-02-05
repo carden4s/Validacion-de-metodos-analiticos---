@@ -371,7 +371,7 @@ def graficar_curva_calibracion_streamlit(datos):
     """Grafica curva de calibración con estilo profesional y anotaciones."""
     # Configuración de estilo
     COLORS = ['#2ecc71', '#3498db', '#e74c3c']  # Verde, Azul, Rojo
-    plt.style.use('seaborn-talk')
+    plt.style.use('seaborn-v0_8-talk')
     
     # Validación de datos
     columnas_necesarias = ['Día', 'Tipo', 'Concentración', 'Absorbancia']
