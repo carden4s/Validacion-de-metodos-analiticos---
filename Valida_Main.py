@@ -1073,9 +1073,13 @@ elif modulo == "Robustez":
 elif modulo == "Estabilidad":
     st.header("Evaluación de Estabilidad")
     st.info("""
-        **Datos requeridos:**
-        - Día | Concentración | Tipo | Absorbancia
+        **Datos requeridos para este módulo:**
+        - **Concentración:** Concentraciones de las soluciones estándar.
+        - **Absorbancia:** Valores de absorbancia medidos.
+        - **Tipo:** Identificar si es "Estándar" o "Muestra".
+        - **Día:** Día en que se realizó la medición.
         """)  
+          
     st.image(str(imagenes_dir / "muestra.png"), caption="Estructura requerida")
     
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
