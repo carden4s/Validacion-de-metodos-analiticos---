@@ -11,6 +11,9 @@ import plotly.express as px
 from fpdf import FPDF
 import base64
 from datetime import datetime
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
@@ -657,7 +660,7 @@ def evaluar_robustez(datos):
     st.header("🧪 Análisis de Robustez - ICH Q2")
 
     # Validación mejorada
-    columnas_necesarias = ['Absorbancia', 'Día', 'Concentración', 'Tipo']
+    columnas_necesarias = ['Absorbancia', 'Día', 'Concentración', 'Tipo', 'Analista']
     if not validar_columnas(datos, columnas_necesarias):
         return
 
@@ -673,7 +676,7 @@ def evaluar_robustez(datos):
     # Selección de factores
     factores = st.multiselect(
         "Selecciona factores a evaluar:",
-        options=['Día', 'Concentración', 'Tipo'],
+        options=['Día', 'Concentración', 'Tipo', 'Analista'],
         default=['Día']
     )
 
@@ -739,7 +742,7 @@ def evaluar_robustez(datos):
 
                 # Análisis post-hoc si es necesario
                 if not robustez:
-                    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+                
                     tukey = pairwise_tukeyhsd(datos['Absorbancia'], datos[factor])
                     with st.expander("🔍 Análisis Post-Hoc (Tukey)"):
                         st.text(str(tukey.summary()))
@@ -754,47 +757,54 @@ def evaluar_robustez(datos):
         ax.set_title("Tendencia de Absorbancia por Día y Concentración")
         st.pyplot(fig)
         plt.close(fig)  
+
 def evaluar_estabilidad(datos):
     """
-    Evalúa la estabilidad de soluciones por día según ICH Q2 R1 para UV-Vis
+    Evalúa la estabilidad de soluciones por día según ICH Q2 R1 para UV-Vis.
+    Se consideran la concentración teórica y el analista como factores adicionales.
+    
+    Aspectos evaluados:
+      - Preprocesamiento: conversión de fechas y columnas numéricas.
+      - Análisis de Estándares: 
+          * ANOVA entre días y analistas.
+          * Cálculo de RSD por rango de concentración (Bajo, Medio, Alto).
+          * Gráficos de tendencia y boxplots de Absorbancia.
+          * Evaluación de la pendiente de la tendencia (regresión lineal).
+          * **Análisis de residuales:** Scatter y violin plots para detectar patrones no aleatorios.
+      - Análisis de Muestras: Similar agrupación por rango teórico, gráficos de tendencia y métricas.
     """
     # Configuración inicial
-    st.header("📊 Análisis de Estabilidad UV-Vis")
+    st.header("📊 Análisis de Estabilidad / Robustez UV-Vis")
     sns.set_theme(style="whitegrid", palette="muted")
     
-    # Validación de columnas
-    required_cols = ['Día', 'Concentración', 'Absorbancia', 'Tipo']
+    # Validación de columnas requeridas
+    required_cols = ['Día', 'Concentración', 'Absorbancia', 'Tipo', 'Analista']
     if not all(col in datos.columns for col in required_cols):
         st.error(f"❌ Faltan columnas requeridas: {', '.join(required_cols)}")
         return
 
     try:
-        # Copia del dataframe original
-        df = datos.copy()
-        
         # ============================================
-        # 1. Preprocesamiento de datos
+        # 1. Preprocesamiento de Datos
         # ============================================
         with st.expander("🧹 Preprocesamiento de datos", expanded=False):
-            # Convertir fecha
+            df = datos.copy()
+            # Convertir 'Día' a datetime (formato dd/mm/YYYY)
             df['Día'] = pd.to_datetime(df['Día'], format='%d/%m/%Y', errors='coerce')
-            
-            # Detectar fechas inválidas
+            # Verificar fechas inválidas
             invalid_dates = df[df['Día'].isna()]
             if not invalid_dates.empty:
                 st.error("⚠️ Fechas inválidas detectadas:")
                 st.dataframe(invalid_dates)
                 return
-            
-            # Convertir a días numéricos (días desde la primera medición)
+            # Calcular 'Día_num' (días desde la primera medición)
             df['Día_num'] = (df['Día'] - df['Día'].min()).dt.days + 1
-            
-            # Convertir columnas numéricas
+
+            # Convertir columnas numéricas (reemplazando comas por puntos)
             numeric_cols = ['Concentración', 'Absorbancia']
             for col in numeric_cols:
                 df[col] = df[col].astype(str).str.replace(',', '.').astype(float)
-            
-            # Validar valores numéricos
+            # Verificar que no haya valores no numéricos
             non_numeric = df[df[numeric_cols].isna().any(axis=1)]
             if not non_numeric.empty:
                 st.error("❌ Valores no numéricos detectados:")
@@ -808,114 +818,136 @@ def evaluar_estabilidad(datos):
         # 2. Análisis de Estándares
         # ============================================
         estandares = df[df['Tipo'] == 'Estándar']
-        
+        rangos = {
+            'Bajo': (0, 0.33),
+            'Medio': (0.34, 0.66),
+            'Alto': (0.67, 1.0)
+        }
         with st.expander("🔬 Análisis de Estándares", expanded=True):
             if not estandares.empty:
-                # ANOVA entre días
-                grupos_anova = [grupo['Absorbancia'] for _, grupo in estandares.groupby('Día_num')]
-                if len(grupos_anova) > 1:
-                    f_val, p_val = f_oneway(*grupos_anova)
-                else:
-                    p_val = 1.0  # Si solo hay un día
+                # ANOVA: Evaluar efecto del día y del analista
+                model = ols('Absorbancia ~ C(Día_num) + C(Analista)', data=estandares).fit()
+                anova_results = anova_lm(model, typ=2)
+                st.markdown("#### Resultados ANOVA (Estándares)")
+                st.write(anova_results)
                 
-                # Cálculo de RSD
-                rsd_data = estandares.groupby(['Día_num', 'Concentración'])['Absorbancia'].agg(
-                    Media = np.mean,
-                    DE = np.std,
-                    RSD = lambda x: (np.std(x)/np.mean(x))*100 if np.mean(x) != 0 else np.nan
-                ).reset_index()
-
-                # Gráficos
+                # Cálculo de RSD por rango de concentración
+                rsd_results = []
+                for nombre, (min_conc, max_conc) in rangos.items():
+                    subset = estandares[(estandares['Concentración'] >= min_conc) & 
+                                        (estandares['Concentración'] <= max_conc)]
+                    if not subset.empty:
+                        rsd_series = (subset.groupby('Día_num')['Absorbancia'].std(ddof=1) / 
+                                      subset.groupby('Día_num')['Absorbancia'].mean()) * 100
+                        rsd_results.append({
+                            'Rango': nombre,
+                            'RSD Promedio': rsd_series.mean(),
+                            'RSD Máximo': rsd_series.max()
+                        })
+                rsd_df = pd.DataFrame(rsd_results)
+                st.markdown("#### Resumen de RSD en Estándares por Rango de Concentración")
+                st.dataframe(rsd_df)
+                
+                # Gráficos de Estándares
                 col1, col2 = st.columns(2)
                 with col1:
-                    fig1 = plt.figure(figsize=(8,4))
+                    fig1, ax1 = plt.subplots(figsize=(8,4))
                     sns.lineplot(data=estandares, x='Día_num', y='Absorbancia', 
-                                hue='Concentración', style='Concentración',
-                                markers=True, dashes=False, ci=95)
-                    plt.title("Tendencia de Absorbancia en Estándares")
-                    plt.xlabel("Días desde inicio")
+                                 hue='Concentración', style='Analista',
+                                 markers=True, dashes=False, ci=95, ax=ax1)
+                    ax1.set_title("Tendencia de Absorbancia en Estándares")
+                    ax1.set_xlabel("Días desde inicio")
+                    ax1.set_ylabel("Absorbancia")
+                    plt.tight_layout()
                     st.pyplot(fig1)
-                
                 with col2:
-                    fig2 = plt.figure(figsize=(8,4))
-                    sns.boxplot(data=rsd_data, x='Día_num', y='RSD')
-                    plt.axhline(2, color='r', linestyle='--', label='Límite ICH')
-                    plt.title("Variabilidad Inter-Día (RSD %)")
+                    fig2, ax2 = plt.subplots(figsize=(8,4))
+                    sns.boxplot(data=rsd_df, x='Rango', y='RSD Máximo', palette='Set2', ax=ax2)
+                    ax2.axhline(2, color='red', linestyle='--', label='Límite ICH (2%)')
+                    ax2.set_title("RSD Máximo por Rango")
+                    ax2.set_ylabel("RSD (%)")
+                    ax2.legend()
+                    plt.tight_layout()
                     st.pyplot(fig2)
-
-                # Métricas
-                st.metric("RSD Máximo Estándares", 
-                         f"{rsd_data['RSD'].max():.2f}%", 
-                         "Cumple ICH" if rsd_data['RSD'].max() <= 2 else "No cumple")
                 
-                st.metric("ANOVA entre días (p-valor)", 
-                         f"{p_val:.4f}", 
-                         "Estable" if p_val > 0.05 else "Inestable")
+                # Evaluar tendencia global (media diaria) mediante regresión lineal
+                est_global = estandares.groupby('Día_num')['Absorbancia'].mean().reset_index()
+                slope, intercept = np.polyfit(est_global['Día_num'], est_global['Absorbancia'], 1)
+                st.metric("Pendiente de Tendencia (Estándares)", f"{slope:.2e}",
+                          delta="Estable" if abs(slope) < 0.01 else "Inestable")
+                
+                # ============================================
+                # Gráficos de Residuales en Estándares
+                # ============================================
+                st.markdown("#### Análisis de Residuales en Estándares")
+                est_global['Estimado'] = slope * est_global['Día_num'] + intercept
+                est_global['Residuo'] = est_global['Absorbancia'] - est_global['Estimado']
+                
+                col_res, col_violin = st.columns(2)
+                with col_res:
+                    fig_res, ax_res = plt.subplots(figsize=(8,4))
+                    sns.scatterplot(data=est_global, x='Día_num', y='Residuo', ax=ax_res, color='blue')
+                    ax_res.axhline(0, color='red', linestyle='--', label="Residuo = 0")
+                    ax_res.set_title("Residuales (Scatter Plot)")
+                    ax_res.set_xlabel("Día")
+                    ax_res.set_ylabel("Residuo")
+                    ax_res.legend()
+                    plt.tight_layout()
+                    st.pyplot(fig_res)
+                with col_violin:
+                    fig_violin, ax_violin = plt.subplots(figsize=(8,4))
+                    sns.violinplot(x=est_global['Residuo'], color='lightgreen', ax=ax_violin)
+                    ax_violin.set_title("Distribución de Residuales (Violin Plot)")
+                    ax_violin.set_xlabel("Residuo")
+                    plt.tight_layout()
+                    st.pyplot(fig_violin)
             else:
                 st.warning("No hay datos de estándares para análisis")
-
+                
         # ============================================
-        # 3. Análisis de Muestras
+        # 3. Análisis de Muestras (Concentración Teórica)
         # ============================================
         muestras = df[df['Tipo'] == 'Muestra']
-        
-        with st.expander("🧪 Análisis de Muestras"):
+        with st.expander("🧪 Análisis de Muestras", expanded=True):
             if not muestras.empty:
-                # Calcular concentraciones usando curvas diarias
-                muestras_cal = []
-                for dia in muestras['Día_num'].unique():
-                    try:
-                        # Obtener curva del día
-                        est_dia = estandares[estandares['Día_num'] == dia]
-                        
-                        if len(est_dia['Concentración'].unique()) > 1:
-                            slope, intercept, r_value, p_val, _ = linregress(
-                                est_dia['Concentración'], 
-                                est_dia['Absorbancia']
-                            )
-                            
-                            if r_value**2 >= 0.995:
-                                muestras_dia = muestras[muestras['Día_num'] == dia].copy()
-                                muestras_dia['Conc_Calc'] = (muestras_dia['Absorbancia'] - intercept)/slope
-                                muestras_cal.append(muestras_dia)
-                    except Exception as e:
-                        continue
+                rsd_results_muestras = []
+                for nombre, (min_conc, max_conc) in rangos.items():
+                    subset = muestras[(muestras['Concentración'] >= min_conc) & 
+                                      (muestras['Concentración'] <= max_conc)]
+                    if not subset.empty:
+                        rsd_series = (subset.groupby('Día_num')['Absorbancia'].std(ddof=1) / 
+                                      subset.groupby('Día_num')['Absorbancia'].mean()) * 100
+                        rsd_results_muestras.append({
+                            'Rango': nombre,
+                            'RSD Promedio': rsd_series.mean(),
+                            'RSD Máximo': rsd_series.max()
+                        })
+                rsd_muestras_df = pd.DataFrame(rsd_results_muestras)
+                st.markdown("#### Resumen de RSD en Muestras por Rango Teórico")
+                st.dataframe(rsd_muestras_df)
                 
-                if muestras_cal:
-                    df_muestras = pd.concat(muestras_cal)
-                    
-                    # Gráfico de tendencia
-                    fig = plt.figure(figsize=(10,4))
-                    sns.regplot(data=df_muestras, x='Día_num', y='Conc_Calc',
-                               scatter_kws={'alpha':0.7}, line_kws={'color':'red'})
-                    plt.title("Tendencia de Concentración en Muestras")
-                    plt.xlabel("Días desde inicio")
-                    st.pyplot(fig)
-                    
-                    # Cálculo de RSD
-                    rsd_muestras = (df_muestras.groupby('Día_num')['Conc_Calc'].std() / 
-                                   df_muestras.groupby('Día_num')['Conc_Calc'].mean()) * 100
-                    
-                    # Métricas
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("RSD Máximo Muestras", 
-                                 f"{rsd_muestras.max():.2f}%", 
-                                 "Cumple ICH" if rsd_muestras.max() <= 5 else "No cumple")
-                    with col2:
-                        slope, _ = np.polyfit(df_muestras['Día_num'], df_muestras['Conc_Calc'], 1)
-                        st.metric("Pendiente de Tendencia", 
-                                 f"{slope:.2e}", 
-                                 "Estable" if abs(slope) < 0.01 else "Inestable")
-                else:
-                    st.warning("No hay suficientes datos para calcular concentraciones")
+                # Gráfico de tendencia de Absorbancia en Muestras
+                fig3, ax3 = plt.subplots(figsize=(10,4))
+                sns.lineplot(data=muestras, x='Día_num', y='Absorbancia',
+                             hue='Concentración', style='Analista',
+                             markers=True, dashes=False, ci=95, ax=ax3)
+                ax3.set_title("Tendencia de Absorbancia en Muestras")
+                ax3.set_xlabel("Días desde inicio")
+                plt.tight_layout()
+                st.pyplot(fig3)
+                
+                # Evaluar estabilidad en Muestras mediante la pendiente de la tendencia
+                muestras_global = muestras.groupby('Día_num')['Absorbancia'].mean().reset_index()
+                slope_m, intercept_m = np.polyfit(muestras_global['Día_num'], muestras_global['Absorbancia'], 1)
+                st.metric("Pendiente de Tendencia (Muestras)", f"{slope_m:.2e}",
+                          delta="Estable" if abs(slope_m) < 0.01 else "Inestable")
             else:
                 st.warning("No hay datos de muestras para análisis")
-
+                
     except Exception as e:
         st.error(f"🚨 Error crítico: {str(e)}")
-        
-        # Lógica principal para cada módulo
+
+# Lógica principal para cada módulo
 def procesar_archivo(datos, funcion_analisis):
     """Función mejorada para manejar diferentes codificaciones y formatos"""
     if datos is not None:
