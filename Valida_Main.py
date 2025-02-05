@@ -95,7 +95,8 @@ modulo = st.sidebar.selectbox(
         "Límites de Detección y Cuantificación",
         "Exactitud (Recuperación)",
         "Precisión (Repetibilidad e Intermedia)",
-        "Robustez"
+        "Robustez",
+        "Estabilidad"
     ]
 )
 
@@ -752,46 +753,171 @@ def evaluar_robustez(datos):
                     markers=True, ci=95)
         ax.set_title("Tendencia de Absorbancia por Día y Concentración")
         st.pyplot(fig)
-        plt.close(fig)        
-
-
+        plt.close(fig)  
 def evaluar_estabilidad(datos):
-    """Evalúa la estabilidad de la solución en el tiempo."""
-    columnas_necesarias = ['Tiempo', 'Absorbancia']
-    if not validar_columnas(datos, columnas_necesarias):
+    """
+    Evalúa la estabilidad de soluciones por día según ICH Q2 R1 para UV-Vis
+    """
+    # Validación de columnas
+    columnas_requeridas = ['Día', 'Concentración', 'Tipo', 'Absorbancia']
+    if not all(col in datos.columns for col in columnas_requeridas):
+        st.error("❌ Error: El archivo no tiene las columnas requeridas")
         return
 
-    x = datos['Tiempo']
-    y = datos['Absorbancia']
-    slope, intercept, r_value, p_value, std_err = linregress(x, y)
+    try:
+        # Preprocesamiento con validación
+        df = datos.copy().dropna(subset=columnas_requeridas)
+        if df.empty:
+            st.error("⚠️ Archivo vacío después de limpieza")
+            return
+            
+        # Conversión numérica segura
+        for col in ['Día', 'Concentración', 'Absorbancia']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        df.dropna(subset=columnas_requeridas, inplace=True)
+        if df.empty:
+            st.error("🚨 Datos no numéricos en columnas clave")
+            return
 
-    st.write(f"**Pendiente:** {slope:.4f}")
-    st.write(f"**Intercepto:** {intercept:.4f}")
-    st.write(f"**Coeficiente de determinación (R²):** {r_value**2:.4f}")
+        # Separar datos con verificación
+        estandares = df[df['Tipo'] == 'Estándar']
+        muestras = df[df['Tipo'] == 'Muestra']
+        
+        if estandares.empty:
+            st.warning("⚠️ No hay datos de estándares para análisis")
+        if muestras.empty:
+            st.warning("⚠️ No hay datos de muestras para análisis")
+    except Exception as e:
+        st.error(f"Error crítico: {str(e)}")
 
-    if abs(slope) < 0.01:
-        st.success("El método es estable en el tiempo (pendiente cercana a 0).")
-    else:
-        st.error("El método no es estable en el tiempo (pendiente alejada de 0).")
+        # ============================================
+        # 1. Análisis de Estándares (Mejorado)
+        # ============================================
+        cumplimiento_estandares = None
+        if not estandares.empty:
+            try:
+                grupos_dia = estandares.groupby('Día')['Absorbancia']
+                rsd_inter = (grupos_dia.std() / grupos_dia.mean() * 100)
+                cumplimiento_estandares = rsd_inter.max() <= 2
+            except Exception as e:
+                st.error(f"Error en estándares: {str(e)}")
+    try:
+        # 1. Convertir 'Día' a datetime y luego a días numéricos
+        df['Día'] = pd.to_datetime(df['Día'], 
+                                 format='%d/%m/%Y', 
+                                 errors='coerce')
+        
+        # Detectar fechas inválidas
+        fechas_invalidas = df[df['Día'].isna()]
+        if not fechas_invalidas.empty:
+            st.error("⚠️ Fechas inválidas detectadas. Corrija estas filas:")
+            st.dataframe(fechas_invalidas)
+            return
+            
+        # Convertir a días desde la primera medición (opcional)
+        df['Día_num'] = (df['Día'] - df['Día'].min()).dt.days + 1
+        
+        # 2. Validar formato numérico en otras columnas
+        columnas_numericas = ['Concentración', 'Absorbancia', 'ID Muestra']
+        for col in columnas_numericas:
+            # Reemplazar comas por puntos si existen
+            df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Detectar valores no convertibles
+            no_numericos = df[df[col].isna()]
+            if not no_numericos.empty:
+                st.error(f"❌ Valores no numéricos en columna '{col}':")
+                st.dataframe(no_numericos[['Día', col]])
+                return
+                
+        # ============================================
+        # 2. Análisis de Muestras (Mejorado)
+        # ============================================
+        cumplimiento_muestras = None
+        slope = None
+        if not muestras.empty:
+            try:
+                # Cálculo de concentraciones
+                muestras_cal = []
+                for dia in muestras['Día'].unique():
+                    est_dia = estandares[estandares['Día'] == dia]
+                    if len(est_dia) >= 2:
+                        slope, intercept = np.polyfit(est_dia['Concentración'], est_dia['Absorbancia'], 1)
+                        muestras_dia = muestras[muestras['Día'] == dia].copy()
+                        muestras_dia['Conc_Calc'] = (muestras_dia['Absorbancia'] - intercept) / slope
+                        muestras_cal.append(muestras_dia)
+                
+                if muestras_cal:
+                    df_muestras = pd.concat(muestras_cal)
+                    rsd_muestras = (df_muestras.groupby('Día')['Conc_Calc'].std() / 
+                                   df_muestras.groupby('Día')['Conc_Calc'].mean() * 100)
+                    cumplimiento_muestras = rsd_muestras.max() <= 5
+                    slope, _ = np.polyfit(df_muestras['Día'], df_muestras['Conc_Calc'], 1)
+            except Exception as e:
+                st.error(f"Error en muestras: {str(e)}")
 
-    plt.figure(figsize=(8, 5))
-    sns.lineplot(x=x, y=y, marker='o')
-    plt.title("Estabilidad de la Solución")
-    plt.xlabel("Tiempo")
-    plt.ylabel("Absorbancia")
-    st.pyplot(plt)
+        # ============================================
+        # 3. Resumen de Cumplimiento (Modificado)
+        # ============================================
+        st.divider()
+        with st.container():
+            cols = st.columns(3)
+            criterios = {
+                "Estándares": ("✅ Cumple" if cumplimiento_estandares else "❌ No cumple") if cumplimiento_estandares is not None else "Datos insuficientes",
+                "Muestras": ("✅ Cumple" if cumplimiento_muestras else "❌ No cumple") if cumplimiento_muestras is not None else "Datos insuficientes",
+                "Tendencia": ("✅ Estable" if abs(slope) < 0.01 else "❌ Inestable") if slope is not None else "Datos insuficientes"
+            }
+            
+            for (nombre, estado), col in zip(criterios.items(), cols):
+                with col:
+                    st.metric(f"Cumplimiento {nombre}", estado)
+
+    except Exception as e:
+        st.error(f"Error crítico: {str(e)}")
 
 # Lógica principal para cada módulo
-def procesar_archivo(datos, funcion_calculo):
-    """Procesa el archivo subido y ejecuta la función de cálculo correspondiente."""
-    if datos:
+def procesar_archivo(datos, funcion_analisis):
+    """Función mejorada para manejar diferentes codificaciones y formatos"""
+    if datos is not None:
         try:
-            datos_df = pd.read_csv(datos) if datos.name.endswith('.csv') else pd.read_excel(datos)
-            previsualizar_datos(datos_df)
-            funcion_calculo(datos_df)
-        except Exception as e:
-            st.error(f"Error al procesar el archivo: {e}")
+            # Determinar tipo de archivo
+            if datos.name.endswith('.csv'):
+                # Lista de codificaciones comunes a probar
+                codificaciones = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+                
+                for encoding in codificaciones:
+                    try:
+                        datos.seek(0)  # Reiniciar el cursor del archivo
+                        df = pd.read_csv(datos, encoding=encoding)
+                        st.success(f"Archivo leído con codificación: {encoding}")
+                        return funcion_analisis(df)
+                    except UnicodeDecodeError:
+                        continue
+                
+                # Si ninguna codificación funcionó
+                st.error("Error de codificación. Pruebe guardar el archivo en UTF-8")
+                return
 
+            elif datos.name.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(datos)
+                return funcion_analisis(df)
+
+        except Exception as e:
+            st.error(f"Error al procesar archivo: {str(e)}")
+            st.error("Posibles soluciones:")
+            st.markdown("""
+                1. **Para archivos CSV:**
+                   - Guarde el archivo con codificación UTF-8
+                   - Evite caracteres especiales como ñ, acentos o símbolos
+                   - Use Excel: *Archivo > Guardar Como > CSV UTF-8*
+                
+                2. **Para archivos Excel:**
+                   - Verifique que no tenga fórmulas o formatos complejos
+                   - Guarde como .xlsx (formato moderno)
+            """)
+        
 if modulo == "Linealidad y Rango":
 
     st.header("Análisis de Linealidad y Rango")
@@ -871,3 +997,16 @@ elif modulo == "Robustez":
     st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
     procesar_archivo(datos, evaluar_robustez)
+
+
+# Llamada a la función en el módulo de estabilidad
+elif modulo == "Estabilidad":
+    st.header("Evaluación de Estabilidad")
+    st.info("""
+        **Datos requeridos:**
+        - Día | Concentración | Tipo | Absorbancia
+        """)  
+    st.image(str(imagenes_dir / "muestra.png"), caption="Estructura requerida")
+    
+    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
+    procesar_archivo(datos, evaluar_estabilidad)  # Usa la función mejorada
