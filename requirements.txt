@@ -5,9 +5,6 @@ seaborn
 scipy 
 streamlit 
 openpyxl
-BytesIO
-pathlib
-
 statsmodels
 fpdf
 plotly
