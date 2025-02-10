@@ -14,6 +14,11 @@ from datetime import datetime
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Image as RLImage, Spacer, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
@@ -118,8 +123,6 @@ def validar_columnas(datos, columnas_necesarias):
         st.error(f"El archivo no contiene las siguientes columnas necesarias: {', '.join(columnas_faltantes)}")
         return False
     return True
-
-
 
 
 def calcular_linealidad(datos):
@@ -275,6 +278,8 @@ def calcular_linealidad(datos):
                 - $R^2 ≥ 0.995$ para validación
                 - Residuales < ±2σ (95% confianza)
                 """)
+
+
 
 def calcular_lod_loq(datos):
     """Calcula LOD y LOQ con visualización mejorada y validación extendida."""
@@ -464,6 +469,8 @@ def calcular_precision(datos):
     Evalúa la precisión según ICH Q2 R1 para UV -Vis.
     """
     # Configuración inicial
+
+
     sns.set_theme(style="whitegrid", palette="muted")
     st.header("🎯 Análisis de Precisión - UV-Vis")
 
@@ -519,6 +526,10 @@ def calcular_precision(datos):
         max_rsd_intra = rsd_intra['Absorbancia'].max()
         st.metric("RSD Máximo Intraensayo", f"{max_rsd_intra:.2f}%",
                  delta="Cumple" if max_rsd_intra <= 2 else "No Cumple")
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        st.pyplot(fig)
+
     with col2:
         grupos_inter = estandares.groupby('Concentración')['Absorbancia']
         rsd_inter = (grupos_inter.std() / grupos_inter.mean() * 100).reset_index()
@@ -542,9 +553,10 @@ def calcular_precision(datos):
             'RSD Intermedio Ponderado': f"{rsd_ponderado:.2f}%",
             'Muestras Válidas': len(resultados_muestras) if resultados_muestras else 0,
             'Cumplimiento Global': "✅" if (max_rsd_intra <= 2 and rsd_ponderado <= 3) else "❌"
+            
         }
         st.json(metricas)
-        
+
 def calcular_exactitud(datos):
     """Calcula la exactitud mediante recuperación según ICH Q2 usando concentración teórica vs real."""
     # Validar columnas requeridas
@@ -1037,7 +1049,8 @@ elif modulo == "Precisión (Repetibilidad e Intermedia)":
     img_path = imagenes_dir / "muestra.png"
     st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Absorbancia', 'Tipo'")
     datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    procesar_archivo(datos, calcular_precision)
+    result = procesar_archivo(datos, calcular_precision)
+    
 
 # Módulo de Exactitud
 elif modulo == "Exactitud (Recuperación)":
