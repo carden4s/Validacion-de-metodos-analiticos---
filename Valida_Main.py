@@ -15,7 +15,7 @@ from reportlab.lib.pagesizes import letter, inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from sickit.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression
 from patsy import dmatrices
 from statsmodels.stats.outliers_influence import OLSInfluence
 from statsmodels.stats.stattools import durbin_watson 
