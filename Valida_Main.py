@@ -204,7 +204,7 @@ def calcular_linealidad(data, pdf_gen):
     # 3. Análisis por Analista y Día
     for (analista, dia), grupo in data.groupby(['Analista', 'Día']):
         with st.container():
-            st.markdown(f"## 👨🔬 Analista: {analista} | 📅 Día: {dia}")
+            st.markdown(f"## 🔬 Analista: {analista} | 📅 Día: {dia}")
             pdf_gen.add_subsection(f"Analista: {analista} - Día: {dia}")
 
             # 4. Procesamiento de estándares
@@ -1614,7 +1614,7 @@ elif modulo == "Precisión (Repetibilidad e Intermedia)":
                 st.download_button(
                     label="Descargar PDF",
                     data=st.session_state.current_pdf,
-                    file_name="reporte_precision.pdf",
+                    file_name="reporte_Precisión.pdf",
                     mime="application/pdf"
                 )
     
