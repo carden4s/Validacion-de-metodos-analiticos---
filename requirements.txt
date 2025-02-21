@@ -8,3 +8,5 @@ openpyxl
 statsmodels
 fpdf
 plotly
+reportlab
+
