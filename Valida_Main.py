@@ -1614,7 +1614,7 @@ elif modulo == "Precisión (Repetibilidad e Intermedia)":
                 st.download_button(
                     label="Descargar PDF",
                     data=st.session_state.current_pdf,
-                    file_name="reporte_limites.pdf",
+                    file_name="reporte_precision.pdf",
                     mime="application/pdf"
                 )
     
