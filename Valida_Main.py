@@ -20,6 +20,7 @@ from patsy import dmatrices
 from statsmodels.stats.outliers_influence import OLSInfluence
 from statsmodels.stats.stattools import durbin_watson 
 from sklearn.cluster import KMeans
+import pytz
 import statsmodels.api as sm
 
 
@@ -850,8 +851,9 @@ class PDFGenerator:
         )
         
         # Portada
+        mexico_tz = pytz.timezone("America/Mexico_City")
         elements.append(Paragraph(f"Reporte de Validación: {self.modulo}", title_style))
-        elements.append(Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", self.styles['Normal']))
+        elements.append(Paragraph(f"Fecha: {datetime.now(mexico_tz).strftime('%d/%m/%Y %H:%M')}", self.styles['Normal']))
         elements.append(Spacer(1, 30))
         
         for sec in self.sections:
