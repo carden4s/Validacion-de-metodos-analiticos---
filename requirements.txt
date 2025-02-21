@@ -9,4 +9,4 @@ statsmodels
 fpdf
 plotly
 reportlab
-sklearn
+scikit-learn
