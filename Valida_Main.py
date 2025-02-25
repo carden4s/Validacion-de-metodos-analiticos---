@@ -24,6 +24,7 @@ import pytz
 import statsmodels.api as sm
 
 
+
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 imagenes_dir = current_dir / "img"
@@ -929,6 +930,21 @@ class PDFGenerator:
         pdf_buffer.seek(0)
         return pdf_buffer
 
+
+
+def generar_descarga(datos):
+    """Genera archivo Excel descargable con los resultados"""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        datos.to_excel(writer, index=False, sheet_name='Resultados')
+    
+    st.download_button(
+        label="📥 Descargar Resultados Completos",
+        data=output.getvalue(),
+        file_name="exactitud_analitica.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Descarga todos los resultados en formato Excel"
+    )
 #########################
 # Función procesar_archivo
 #########################
@@ -1184,27 +1200,8 @@ def calcular_exactitud(datos, pdf_gen):
     
     return True
 
-def validar_columnas(datos, columnas):
-    """Valida la presencia de columnas requeridas en el dataset"""
-    faltantes = [col for col in columnas if col not in datos.columns]
-    if faltantes:
-        st.error(f"Columnas faltantes: {', '.join(faltantes)}")
-        return False
-    return True
 
-def generar_descarga(datos):
-    """Genera archivo Excel descargable con los resultados"""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        datos.to_excel(writer, index=False, sheet_name='Resultados')
-    
-    st.download_button(
-        label="📥 Descargar Resultados Completos",
-        data=output.getvalue(),
-        file_name="exactitud_analitica.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        help="Descarga todos los resultados en formato Excel"
-    )
+
 
 def evaluar_robustez(datos, pdf_gen):
     """

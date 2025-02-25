@@ -11,3 +11,4 @@ plotly
 reportlab
 scikit-learn
 pytz
+xlsxwriter
