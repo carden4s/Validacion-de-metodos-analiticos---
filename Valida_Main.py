@@ -22,6 +22,21 @@ from statsmodels.stats.stattools import durbin_watson
 from sklearn.cluster import KMeans
 import pytz
 import statsmodels.api as sm
+import plotly.express as px
+import kaleido as kl 
+import pandas as pd
+import numpy as np
+import streamlit as st
+import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.express as px
+from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib.pagesizes import letter, inch
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from datetime import datetime
+import pytz
 
 
 
@@ -166,7 +181,7 @@ def procesar_archivo(archivo, funcion_procesamiento, modulo):
                     return False
             
             # Generar PDF si el procesamiento es exitoso
-            if overall_result:
+            if overall_result is not False:
                 pdf = pdf_gen.generate_pdf()
                 st.session_state['current_pdf'] = pdf
                 st.session_state['current_module'] = modulo
@@ -792,11 +807,22 @@ class PDFGenerator:
         self.custom_tables.append((title, table_data))
 
     def capture_figure(self, fig, fig_name=None):
+        """
+        Captura la figura y la almacena en buffers.
+        Si la figura es Matplotlib (tiene savefig), se usa ese método;
+        de lo contrario, se asume que es Plotly y se utiliza plotly.io.to_image.
+        """
         buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+        import plotly.io as pio
+        if hasattr(fig, "savefig"):
+            fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+            plt.close(fig)
+        else:
+            # Se convierte la figura Plotly a imagen PNG
+            image_bytes = pio.to_image(fig, format="png", scale=2)
+            buf.write(image_bytes)
         buf.seek(0)
         self.buffers.append(buf)
-        plt.close(fig)
 
     def add_metric(self, label, value, cumplimiento):
         self.metrics.append({
@@ -930,8 +956,7 @@ class PDFGenerator:
         pdf_buffer.seek(0)
         return pdf_buffer
 
-
-
+# Función para generar archivo Excel descargable
 def generar_descarga(datos):
     """Genera archivo Excel descargable con los resultados"""
     output = BytesIO()
@@ -945,22 +970,21 @@ def generar_descarga(datos):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         help="Descarga todos los resultados en formato Excel"
     )
-#########################
-# Función procesar_archivo
-#########################
+
+# Función para procesar el archivo
 def procesar_archivo(archivo, funcion_procesamiento, modulo):
     if archivo:
         try:
             # Inicializar generador de PDF
             pdf_gen = PDFGenerator(modulo)
             
-            # Cargar datos
+            # Cargar datos según extensión
             if archivo.name.endswith('.csv'):
                 data = pd.read_csv(archivo)
             else:
                 data = pd.read_excel(archivo)
             
-            # Verificar que funcion_procesamiento es callable o iterable de callables
+            # Procesamiento: admitir una función o una lista de funciones
             if isinstance(funcion_procesamiento, (list, tuple)):
                 resultados = []
                 for func in funcion_procesamiento:
@@ -970,16 +994,29 @@ def procesar_archivo(archivo, funcion_procesamiento, modulo):
                     else:
                         st.error("Error: Uno de los elementos de la lista/tuple de funciones no es callable.")
                         return False
-                overall_result = all(resultados)
+                # Verificar que ninguno de los resultados sea False o un DataFrame vacío
+                overall_result = True
+                for res in resultados:
+                    if isinstance(res, bool) and res is False:
+                        overall_result = False
+                        break
+                    elif isinstance(res, pd.DataFrame) and res.empty:
+                        overall_result = False
+                        break
             else:
                 if callable(funcion_procesamiento):
                     overall_result = funcion_procesamiento(data, pdf_gen)
+                    if isinstance(overall_result, pd.DataFrame) and overall_result.empty:
+                        overall_result = False
                 else:
                     st.error("Error: La función de procesamiento no es callable.")
                     return False
             
-            # Generar PDF si el procesamiento es exitoso
-            if overall_result:
+            # Verificar explícitamente el resultado sin evaluarlo directamente en un contexto booleano
+            if overall_result is False:
+                st.error("El procesamiento no generó resultados válidos.")
+                return False
+            else:
                 pdf = pdf_gen.generate_pdf()
                 st.session_state['current_pdf'] = pdf
                 st.session_state['current_module'] = modulo
@@ -1200,151 +1237,265 @@ def calcular_exactitud(datos, pdf_gen):
     
     return True
 
+def capture_figure(self, fig, fig_name=None):
+    from io import BytesIO
+    buf = BytesIO()
+    import plotly.io as pio
+    # Si la figura tiene el método savefig, asumimos que es Matplotlib
+    if hasattr(fig, "savefig"):
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+        plt.close(fig)
+    else:
+        # Si es una figura Plotly, usamos pio.to_image para obtener la imagen en PNG
+        image_bytes = pio.to_image(fig, format="png", scale=2)
+        buf.write(image_bytes)
+    buf.seek(0)
+    self.buffers.append(buf)
 
-
+def agrupar_valores(valores, umbral=1.0):
+    """
+    Agrupa valores numéricos con una tolerancia especificada usando clustering básico.
+    Cada grupo se forma si la diferencia entre el valor y la mediana del grupo es menor o igual al umbral.
+    """
+    grupos = []
+    for valor in sorted(valores):
+        agregado = False
+        for grupo in grupos:
+            if abs(valor - np.median(grupo)) <= umbral:
+                grupo.append(valor)
+                agregado = True
+                break
+        if not agregado:
+            grupos.append([valor])
+    return grupos
 
 def evaluar_robustez(datos, pdf_gen):
     """
-    Evalúa la robustez del método comparando la media de la respuesta en cada nivel
-    de uno o varios factores con la media global. Se calcula la diferencia porcentual 
-    absoluta y se determina si dicha variación está dentro de un umbral preestablecido.
+    Evalúa la robustez del método analítico agrupando concentraciones en rangos (±1 unidad)
+    y analizando las respuestas de la señal según múltiples factores, siguiendo las guías CCYAC.
     
     Parámetros:
-      - datos (DataFrame): Debe contener las columnas ['Respuesta', 'Día', 'Concentración', 'Tipo', 'Analista'].
-      - pdf_gen: Objeto para generar el PDF (métodos: add_section_title, add_text_block, add_table, capture_figure).
-    
-    Metodología (adaptada de la guía CCYAC y Farmacéuticos):
-      1. Para cada factor seleccionado, se calcula la media global de 'Respuesta'.
-      2. Se agrupa el conjunto de datos por el factor y se calcula la media en cada nivel.
-      3. Se calcula la diferencia porcentual absoluta:
-            d_i = |(Media del grupo - Media global) / Media global| * 100
-      4. Se evalúa robustez si, para cada factor, el valor máximo (o promedio) de d_i es menor o igual al umbral:
-            - Por ejemplo, umbral = 2% para métodos cromatográficos/volumétricos,
-                          3% para métodos químicos/espectrofotométricos,
-                          5% para métodos biológicos.
-    
-    Los resultados se muestran en Streamlit y se registran en el PDF.
+      - datos: DataFrame con columnas ['Respuesta', 'Concentración', 'Día'] y otros factores adicionales.
+      - pdf_gen: Objeto PDFGenerator configurado para reportar los resultados.
     """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Configuración visual inicial
     sns.set_theme(style="whitegrid", palette="pastel")
-    st.header("🧪 Análisis de Robustez")
-    pdf_gen.add_section_title("Análisis de Robustez")
-    
-    # Mostrar metodología (adaptada)
-    with st.expander("📚 Metodología", expanded=False):
-        metodologia = (
-            "**Metodología para Evaluar Robustez:**\n"
-            "1. Calcular la media global de 'Respuesta' (valor de referencia).\n"
-            "2. Para cada nivel del factor a evaluar, calcular la media de 'Respuesta'.\n"
-            "3. Calcular la diferencia porcentual absoluta respecto a la media global:\n"
-            "      d_i = |(Media del grupo - Media global) / Media global| * 100\n"
-            "4. El método se considera robusto respecto a ese factor si la diferencia máxima (o promedio) "
-            "es ≤ umbral (ej. 2% para métodos cromatográficos, 3% para métodos químicos, 5% para biológicos).\n"
-            "5. Se reportan estos resultados y se generan gráficos de la distribución de 'Respuesta' por nivel."
-        )
-        st.markdown(metodologia)
-        pdf_gen.add_subsection("Metodología")
-        pdf_gen.add_text_block(metodologia)
-    
-    # Validar columnas
-    required_cols = ['Respuesta', 'Día', 'Concentración', 'Tipo', 'Analista', 'pH']
+    st.header("🧪 Análisis de Robustez por Concentración (CCYAC)")
+    pdf_gen.add_section_title("Análisis de Robustez por Concentración - CCYAC")
+
+    # 1. Validación de columnas esenciales
+    required_cols = ['Respuesta', 'Concentración', 'Día']
     for col in required_cols:
         if col not in datos.columns:
-            st.error(f"Falta la columna '{col}' en el DataFrame.")
-            pdf_gen.add_text_block(f"✘ Error: Falta la columna '{col}' en el DataFrame.", style="error")
+            st.error(f"Columna requerida faltante: {col}")
+            pdf_gen.add_text_block(f"✘ Error: Falta columna {col}", style="error")
             return False
 
-    # Conversión numérica
-    for col in ['Respuesta', 'Concentración']:
-        datos[col] = pd.to_numeric(datos[col], errors='coerce')
-    datos.dropna(subset=['Respuesta', 'Concentración'], inplace=True)
-    
-    # Permitir al usuario seleccionar uno o varios factores para evaluar robustez
-    opciones = ['Día', 'Concentración', 'Analista','pH']  # Evitamos 'Tipo' pues usualmente se usa para clasificar muestras/estándares
-    factores_seleccionados = st.multiselect("Selecciona los factores a evaluar en la robustez:", options=opciones, default=['Día'])
-    pdf_gen.add_text_block("Factores a evaluar: " + ", ".join(factores_seleccionados))
-    
-    # Selección del tipo de método para robustez (para definir el umbral)
-    tipo_metodo = st.selectbox("Selecciona el tipo de método:", 
-                               options=["cromatografico", "quimico", "espectrofotometrico", "biologico"])
-    if tipo_metodo == "cromatografico":
-        umbral = 2.0
-    elif tipo_metodo in ["quimico", "espectrofotometrico"]:
-        umbral = 3.0
-    elif tipo_metodo == "biologico":
-        umbral = 5.0
-    else:
-        umbral = 2.0
+    # 2. Procesamiento y limpieza de datos
+    try:
+        # Conversión a tipo numérico
+        for col in ['Respuesta', 'Concentración']:
+            datos[col] = pd.to_numeric(datos[col], errors='coerce')
+        
+        # Conversión de fechas y cálculo de días relativos
+        if not np.issubdtype(datos['Día'].dtype, np.datetime64):
+            datos['Día'] = pd.to_datetime(datos['Día'], errors='coerce')
+        datos['Día_num'] = (datos['Día'] - datos['Día'].min()).dt.days
+        
+        # Eliminar filas con valores faltantes en columnas esenciales
+        datos = datos.dropna(subset=required_cols + ['Día_num'])
+    except Exception as e:
+        st.error(f"Error procesando datos: {str(e)}")
+        pdf_gen.add_text_block(f"✘ Error en procesamiento: {str(e)}", style="error")
+        return False
 
-    pdf_gen.add_text_block(f"Tipo de método seleccionado: {tipo_metodo}. Umbral para robustez: {umbral}%.")
+    # 3. Agrupación de concentraciones (±1 unidad) según CCYAC
+    unique_conc = datos['Concentración'].dropna().unique()
+    grupos_conc = agrupar_valores(unique_conc, umbral=1.0)
     
-    # Calcular la media global de la respuesta en el dataset
-    media_global = datos['Respuesta'].mean()
-    st.write(f"**Media global de 'Respuesta':** {media_global:.4f}")
-    pdf_gen.add_text_block(f"Media global de 'Respuesta': {media_global:.4f}")
+    # Crear un mapeo de cada valor a su grupo representativo (mediana del grupo)
+    conc_mapping = {}
+    for grupo in grupos_conc:
+        representante = round(np.median(grupo), 2)
+        for valor in grupo:
+            conc_mapping[valor] = representante
     
-    # Para cada factor seleccionado, agrupar y calcular diferencias relativas
-    resumen_resultados = []
-    for factor in factores_seleccionados:
-        st.subheader(f"Análisis de Robustez - Factor: {factor}")
-        pdf_gen.add_subsection(f"Robustez - Factor: {factor}")
-        # Agrupar datos por el factor y calcular la media para cada nivel
-        grupos = datos.groupby(factor)['Respuesta'].mean().reset_index()
-        grupos['Diferencia (%)'] = abs((grupos['Respuesta'] - media_global) / media_global * 100)
-        st.dataframe(grupos)
-        
-        # Graficar: Boxplot de 'Respuesta' por nivel del factor
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.boxplot(x=factor, y='Respuesta', data=datos, ax=ax)
-        ax.axhline(media_global, color='red', linestyle='--', label=f'Media Global ({media_global:.2f})')
-        ax.set_title(f"Distribución de 'Respuesta' por {factor}")
-        ax.legend()
-        st.pyplot(fig)
-        pdf_gen.capture_figure(fig, f"robustez_boxplot_{factor}")
-        plt.close(fig)
-        
-        # Evaluar robustez: Se considera robusto si la diferencia máxima (o promedio) es ≤ umbral.
-        diffs = grupos['Diferencia (%)']
-        max_diff = diffs.max()
-        avg_diff = diffs.mean()
-        robusto = max_diff <= umbral
-        st.markdown(
-            f"**Resultados para el factor {factor}:**\n"
-            f"- Diferencia máxima: {max_diff:.2f}%\n"
-            f"- Diferencia promedio: {avg_diff:.2f}%\n"
-            f"- **Conclusión:** {'Método Robusto' if robusto else 'Requiere Atención'}"
+    datos['Rango_Conc'] = datos['Concentración'].map(conc_mapping)
+    # Convertir el rango a string formateado para facilitar la visualización
+    datos['Rango_Conc'] = datos['Rango_Conc'].apply(lambda x: f"{x:.2f}")
+
+    # 4. Identificar factores adicionales (excluyendo las columnas esenciales y auxiliares)
+    factores = [col for col in datos.columns if col not in required_cols + ['Día_num', 'Rango_Conc']]
+    if not factores:
+        st.warning("No se detectaron factores adicionales para análisis")
+        pdf_gen.add_text_block("Advertencia: No hay factores adicionales para evaluar", style="warning")
+        return True
+
+    # 5. Interfaz de usuario para configurar el análisis
+    col1, col2 = st.columns(2)
+    with col1:
+        metodo = st.selectbox(
+            "Tipo de método:",
+            options=["Cromatográfico", "Químico", "Biológico"],
+            index=0
         )
-        pdf_gen.add_text_block(
-            f"Resultados para el factor {factor}:\n"
-            f"- Diferencia máxima: {max_diff:.2f}%\n"
-            f"- Diferencia promedio: {avg_diff:.2f}%\n"
-            f"Conclusión: {'Método Robusto' if robusto else 'Requiere Atención'}."
+    with col2:
+        factores_seleccionados = st.multiselect(
+            "Factores a evaluar:",
+            options=factores,
+            default=factores[:2] if len(factores) >= 2 else factores
         )
-        resumen_resultados.append([factor, f"{max_diff:.2f}%", f"{avg_diff:.2f}%", "Robusto" if robusto else "No Robusto"])
+
+    # 6. Definir umbral de aceptación según el tipo de método (guías CCYAC)
+    umbral_map = {
+        "Cromatográfico": 2.0,
+        "Químico": 3.0,
+        "Biológico": 5.0
+    }
+    umbral = umbral_map.get(metodo, 2.0)
+    pdf_gen.add_text_block(f"Configuración:\n- Método: {metodo}\n- Umbral: {umbral}%", style="info")
+
+    # 7. Análisis por rango de concentración
+    resultados = []
+    rangos_ordenados = sorted(datos['Rango_Conc'].unique(), key=lambda x: float(x))
     
-    # Agregar un resumen general al PDF
-    if resumen_resultados:
-        tabla_resumen = [["Factor", "Dif. Máx", "Dif. Promedio", "Robustez"]]
-        tabla_resumen.extend(resumen_resultados)
-        pdf_gen.add_table(tabla_resumen, title="Resumen de Robustez por Factor")
+    for rango in rangos_ordenados:
+        df_rango = datos[datos['Rango_Conc'] == rango].copy()
+        if df_rango.empty:
+            continue
+
+        # 7.1 Cálculo de estadísticos base para el rango
+        media_global = df_rango['Respuesta'].mean()
+        stats = {
+            'Rango': rango,
+            'Media_Global': media_global,
+            'CV_Global': (df_rango['Respuesta'].std() / media_global * 100) if media_global != 0 else 0,
+            'Factores': {}
+        }
+
+        # 7.2 Análisis y visualización para cada factor seleccionado
+        fig, axs = plt.subplots(len(factores_seleccionados), 2, figsize=(12, 4*len(factores_seleccionados)))
+        if len(factores_seleccionados) == 1:
+            axs = [axs]
+            
+        for i, factor in enumerate(factores_seleccionados):
+            # Agrupar el factor si es numérico
+            if pd.api.types.is_numeric_dtype(df_rango[factor]):
+                df_rango = df_rango.copy()  # Evitar advertencias de SettingWithCopy
+                df_rango[f'{factor}_grupo'] = pd.cut(df_rango[factor], bins=3, precision=1).astype(str)
+                col_factor = f'{factor}_grupo'
+            else:
+                col_factor = factor
+
+            # Cálculo de métricas para cada subgrupo dentro del rango
+            grupo_factor = df_rango.groupby(col_factor)['Respuesta']
+            metricas = {
+                'CV': (grupo_factor.std() / grupo_factor.mean() * 100).max(),
+                'Dif_Media': abs((grupo_factor.mean() - media_global) / media_global * 100).max(),
+                'N': grupo_factor.count().max()
+            }
+            stats['Factores'][factor] = metricas
+
+            # Visualización 1: Boxplot
+            ax = axs[i][0]
+            sns.boxplot(x=col_factor, y='Respuesta', data=df_rango, ax=ax, palette="viridis")
+            ax.axhline(media_global, color='r', linestyle='--', label='Media Global')
+            ax.fill_between(
+                ax.get_xlim(),
+                media_global * (1 - umbral/100),
+                media_global * (1 + umbral/100),
+                color='gray',
+                alpha=0.2
+            )
+            ax.set_title(f"{factor} - Rango: {rango}")
+            ax.tick_params(axis='x', rotation=45)
+            
+            # Visualización 2: Stripplot para observar la dispersión de datos
+            ax2 = axs[i][1]
+            sns.stripplot(x=col_factor, y='Respuesta', data=df_rango, ax=ax2, jitter=True, palette="viridis")
+            ax2.axhline(media_global, color='r', linestyle='--')
+            ax2.set_title(f"Distribución: {factor} - Rango: {rango}")
+            ax2.tick_params(axis='x', rotation=45)
+
+        plt.tight_layout()
+        pdf_gen.capture_figure(fig)
+        st.pyplot(fig)  # Mostrar la figura en la página de Streamlit
+        resultados.append(stats)
+
+    # 7.3 Gráficos adicionales para evaluación global
+
+    # Gráfico global: Distribución de Respuestas vs. Concentración con hue de Rango
+    fig_global, ax_global = plt.subplots(figsize=(10, 6))
+    sns.scatterplot(data=datos, x='Concentración', y='Respuesta', hue='Rango_Conc',
+                    palette='viridis', ax=ax_global)
+    ax_global.set_title("Distribución Global: Respuesta vs. Concentración")
+    ax_global.legend(title="Rango Concentración")
+    pdf_gen.capture_figure(fig_global)
+    st.pyplot(fig_global)  # Mostrar el gráfico global
+
+    # Crear DataFrame resumen para heatmaps
+    resumen_rows = []
+    for res in resultados:
+        for factor, metricas in res['Factores'].items():
+            resumen_rows.append({
+                'Rango': res['Rango'],
+                'Factor': factor,
+                'CV': metricas['CV'],
+                'Dif_Media': metricas['Dif_Media']
+            })
+    df_resumen = pd.DataFrame(resumen_rows)
+
+    # Heatmap de CV
+    if not df_resumen.empty:
+        pivot_cv = df_resumen.pivot(index="Rango", columns="Factor", values="CV")
+        fig_cv, ax_cv = plt.subplots(figsize=(8, 6))
+        sns.heatmap(pivot_cv, annot=True, fmt=".2f", cmap="coolwarm", ax=ax_cv)
+        ax_cv.set_title("Heatmap de CV por Rango y Factor")
+        pdf_gen.capture_figure(fig_cv)
+        st.pyplot(fig_cv)  # Mostrar heatmap de CV
+
+        # Heatmap de Diferencia de Media
+        pivot_dif = df_resumen.pivot(index="Rango", columns="Factor", values="Dif_Media")
+        fig_dif, ax_dif = plt.subplots(figsize=(8, 6))
+        sns.heatmap(pivot_dif, annot=True, fmt=".2f", cmap="coolwarm", ax=ax_dif)
+        ax_dif.set_title("Heatmap de Dif. Media (%) por Rango y Factor")
+        pdf_gen.capture_figure(fig_dif)
+        st.pyplot(fig_dif)  # Mostrar heatmap de Diferencia de Media
+
+    # 8. Generación de reporte final de robustez
+    st.subheader("Resumen de Robustez")
+    tabla_resumen = [["Rango", "Factor", "CV Máx (%)", "Dif. Media (%)", "Cumplimiento"]]
     
+    for stats in resultados:
+        for factor, metricas in stats['Factores'].items():
+            cumplimiento = "✅" if metricas['CV'] <= umbral and metricas['Dif_Media'] <= umbral else "❌"
+            tabla_resumen.append([
+                stats['Rango'],
+                factor,
+                f"{metricas['CV']:.2f}",
+                f"{metricas['Dif_Media']:.2f}",
+                cumplimiento
+            ])
+    
+    # Mostrar tabla en Streamlit
+    st.dataframe(pd.DataFrame(tabla_resumen[1:], columns=tabla_resumen[0]))
+    pdf_gen.add_table(tabla_resumen, title="Resumen de Robustez por Factor y Concentración")
+
+    # Conclusión final según criterios de robustez (cumplimiento en todos los rangos y factores)
+    todos_cumplen = all(row[-1] == "✅" for row in tabla_resumen[1:])
+    conclusion = "✅ MÉTODO ROBUSTO" if todos_cumplen else "❌ REQUIERE OPTIMIZACIÓN"
+    if todos_cumplen:
+        st.success(conclusion)
+    else:
+        st.error(conclusion)
+    pdf_gen.add_text_block(f"Conclusión Final: {conclusion}", style="conclusion")
+
     return True
-def agrupar_valores(valores, umbral=1.0):
-    """
-    Agrupa una lista ordenada de valores en grupos donde la diferencia entre elementos consecutivos es <= umbral.
-    Devuelve una lista de grupos (cada grupo es una lista de valores).
-    """
-    grupos = []
-    if not valores:
-        return grupos
-    grupo_actual = [valores[0]]
-    for v in valores[1:]:
-        if v - grupo_actual[-1] <= umbral:
-            grupo_actual.append(v)
-        else:
-            grupos.append(grupo_actual)
-            grupo_actual = [v]
-    grupos.append(grupo_actual)
-    return grupos
 
 def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
     """
@@ -1353,7 +1504,7 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
     utilizando una tolerancia de ±1 y, para cada grupo, se calcula el % de recuperación, la diferencia 
     respecto a 100% y el coeficiente de variación (CV).
 
-    Además, se permite seleccionar interactívamente el tipo de método para definir el umbral de aceptación:
+    Además, se permite seleccionar interactivamente el tipo de método para definir el umbral de aceptación:
        - Cromatográfico: umbral de 2%
        - Químico: umbral de 3%
        - Biológico: umbral de 5%
@@ -1366,6 +1517,11 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
 
     La función genera gráficos y tablas en Streamlit y documenta los resultados en el PDF.
     """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
     sns.set_theme(style="whitegrid", palette="pastel")
     st.header("🧪 Análisis de Estabilidad por Grupo de Concentración")
     pdf_gen.add_section_title("Análisis de Estabilidad por Grupo de Concentración")
@@ -1438,13 +1594,10 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
     st.write(f"Umbral de aceptación para el método {metodo_seleccionado}: {umbral}%")
     pdf_gen.add_text_block(f"Tipo de método seleccionado: {metodo_seleccionado}. Umbral de aceptación: {umbral}%.", style="info")
 
-    # 6. Permitir al usuario seleccionar un factor variable adicional (opcional)
+    # 6. Permitir al usuario seleccionar uno o más factores variables adicionales (opcional)
     columnas_factor = [col for col in datos.columns if col not in ['Día', 'Día_num', 'Respuesta', 'Concentración', 'Rango']]
-    if columnas_factor:
-        factor_variable = st.selectbox("Seleccione un factor variable adicional (opcional):", ["Ninguno"] + columnas_factor)
-    else:
-        factor_variable = "Ninguno"
-    pdf_gen.add_text_block(f"Factor variable seleccionado: {factor_variable}", style="info")
+    factores_variables = st.multiselect("Seleccione factor(es) variables adicionales (opcional):", columnas_factor, default=[])
+    pdf_gen.add_text_block(f"Factor(es) variable(s) seleccionado(s): {', '.join(factores_variables) if factores_variables else 'Ninguno'}", style="info")
 
     # 7. Iterar sobre cada rango y realizar el análisis de estabilidad
     resultados_totales = []
@@ -1475,7 +1628,7 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
 
         st.dataframe(resumen)
         
-        # Gráficos para este rango
+        # Gráficos para este rango: Recuperación y CV vs Tiempo
         fig, ax = plt.subplots(1, 2, figsize=(14, 5))
         sns.lineplot(data=resumen, x='Día_num', y='Recuperación (%)', marker='o', ax=ax[0])
         ax[0].axhline(100, color='red', linestyle='--', label="100% (Baseline)")
@@ -1498,20 +1651,23 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
         pdf_gen.capture_figure(fig, f"estabilidad_{rango_label}")
         plt.close(fig)
         
-        # Análisis complementario del factor variable, si se seleccionó
-        if factor_variable != "Ninguno":
-            st.markdown(f"#### Análisis del factor variable '{factor_variable}' en el rango {rango_label}")
-            pdf_gen.add_text_block(f"Análisis del factor variable '{factor_variable}' en el rango {rango_label}.", style="info")
-            df_factor = df_rango.dropna(subset=[factor_variable])
-            resumen_factor = df_factor.groupby(factor_variable)['Respuesta'].mean().reset_index()
-            st.dataframe(resumen_factor)
-            fig_factor, ax_factor = plt.subplots(figsize=(6, 4))
-            sns.barplot(data=resumen_factor, x=factor_variable, y='Respuesta', ax=ax_factor, palette='viridis')
-            ax_factor.set_title(f"Media de Respuesta por '{factor_variable}' - Rango {rango_label}")
-            plt.xticks(rotation=45)
-            st.pyplot(fig_factor)
-            pdf_gen.capture_figure(fig_factor, f"factor_{factor_variable}_{rango_label}")
-            plt.close(fig_factor)
+        # 8. Análisis complementario de los factores variables seleccionados (agrupación por factor)
+        if factores_variables:
+            for factor in factores_variables:
+                st.markdown(f"#### Análisis del factor variable '{factor}' en el rango {rango_label}")
+                pdf_gen.add_text_block(f"Análisis del factor variable '{factor}' en el rango {rango_label}.", style="info")
+                df_factor = df_rango.dropna(subset=[factor])
+                # Agrupación y cálculo de métricas para el factor
+                resumen_factor = df_factor.groupby(factor)['Respuesta'].agg(['mean', 'std', 'count']).reset_index()
+                resumen_factor.rename(columns={'mean': 'Media', 'std': 'DE', 'count': 'N'}, inplace=True)
+                st.dataframe(resumen_factor)
+                fig_factor, ax_factor = plt.subplots(figsize=(6, 4))
+                sns.boxplot(data=df_factor, x=factor, y='Respuesta', ax=ax_factor, palette='viridis')
+                ax_factor.set_title(f"Distribución de Respuesta por '{factor}' - Rango {rango_label}")
+                plt.xticks(rotation=45)
+                st.pyplot(fig_factor)
+                pdf_gen.capture_figure(fig_factor, f"factor_{factor}_{rango_label}")
+                plt.close(fig_factor)
         
         # Registro de métricas clave para este rango
         resultado = {
@@ -1536,7 +1692,9 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
         st.warning("No se pudieron obtener resultados de estabilidad en ningún rango.")
         pdf_gen.add_text_block("⚠️ No se obtuvieron resultados de estabilidad en ningún rango.", style="warning")
         return False
-    
+
+
+
 if modulo == "Linealidad y Rango":
     st.header("Análisis de Linealidad y Rango")
     st.info("""
