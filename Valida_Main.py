@@ -593,23 +593,27 @@ def agrupar_valores(valores, umbral=1.0):
 
 def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
     """
-    Realiza el análisis de precisión (Precisión del Sistema e Intermedia) para cada rango de concentración,
-    agrupando automáticamente los valores de 'Concentración' según una tolerancia de ±umbral_agrupacion.
+    Realiza el análisis de precisión para cada rango de concentración, siguiendo criterios CCYAC.
     
-    Para la Precisión del Sistema (8.1), se calcula el CV para cada grupo (Analista, Día) en ese rango y se
-    selecciona el grupo con el menor CV para reportarlo.
+    Se evalúa:
+      A. Precisión del Sistema (8.1): Se calcula el CV para cada grupo (Analista-Día) en los datos de estándar,
+         y se identifica el grupo con el menor CV.
+      B. Precisión Intermedia (8.7): Se calcula el CV para cada combinación (Analista, Día) y se resumen
+         los valores (se reporta el CV mínimo y el promedio).
     
-    Para la Precisión Intermedia (8.7), se calcula el CV por cada combinación (Analista, Día) y se resumen los
-    valores (por ejemplo, se reporta el CV mínimo y el promedio de CV de los grupos).
-    
-    Se espera que 'datos' tenga las columnas:
+    Se espera que 'datos' contenga las columnas:
        ['Concentración', 'Respuesta', 'Día', 'Analista', 'Tipo']
-    
-    Los resultados se muestran en Streamlit y se agregan al PDF mediante 'pdf_gen'.
+       
+    Los resultados y gráficos se muestran en Streamlit y se documentan en el PDF mediante 'pdf_gen'.
     """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
     st.header("🎯 Análisis de Precisión por Rango (Agrupamiento Automático)")
     pdf_gen.add_section_title("Análisis de Precisión por Rango (Agrupamiento Automático)")
-
+    
     # 1. Validar columnas requeridas
     required_cols = ['Concentración', 'Respuesta', 'Día', 'Analista', 'Tipo']
     for col in required_cols:
@@ -618,7 +622,7 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
             pdf_gen.add_text_block(f"✘ Error: Falta la columna '{col}' en el DataFrame.", style="error")
             return False
 
-    # 2. Conversión numérica y limpieza
+    # 2. Conversión a numérico y limpieza
     for col in ['Concentración', 'Respuesta']:
         datos[col] = pd.to_numeric(datos[col], errors='coerce')
     datos.dropna(subset=['Concentración', 'Respuesta'], inplace=True)
@@ -643,7 +647,7 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
         tabla_grupos.append([f"{row['Concentración']:.2f}", row['Rango']])
     pdf_gen.add_table(tabla_grupos, title="Agrupación de Concentraciones (Automática)")
 
-    # 4. Iterar sobre cada rango disponible
+    # 4. Iterar sobre cada rango y evaluar precisión
     rangos_disponibles = sorted(datos['Rango'].unique(), key=lambda x: float(x))
     for rango_label in rangos_disponibles:
         df_rango = datos[datos['Rango'] == rango_label].copy()
@@ -653,44 +657,50 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
         st.markdown(f"### Análisis para el Rango {rango_label}")
         pdf_gen.add_subsection(f"Rango {rango_label}")
 
-        # Filtrar estándares
+        # Filtrar únicamente los datos de tipo 'estándar'
         estandares = df_rango[df_rango['Tipo'] == 'estándar'].copy()
         if estandares.empty:
             st.warning(f"No se encontraron datos de tipo 'estándar' en el rango {rango_label}.")
             pdf_gen.add_text_block(f"⚠️ No se encontraron datos de tipo 'estándar' en el rango {rango_label}.", style="warning")
             continue
 
-        # ------------------------------------------------
+        # -----------------------------------------------------
         # A: Precisión del Sistema (8.1)
-        # ------------------------------------------------
+        # -----------------------------------------------------
         with st.expander(f"📊 Precisión del Sistema - Rango {rango_label}", expanded=False):
             pdf_gen.add_subsection(f"Precisión del Sistema (8.1) - Rango {rango_label}")
             grupos = estandares.groupby(['Analista', 'Día'])
-            resultados = []
+            resultados_sistema = []
+            # Calcular CV para cada grupo (se requiere al menos 6 réplicas)
             for (analista, dia), grupo in grupos:
                 if len(grupo) < 6:
                     st.warning(f"Analista {analista} (Día {dia}): Insuficientes réplicas ({len(grupo)}/6)")
                     continue
-                cv = (grupo['Respuesta'].std() / grupo['Respuesta'].mean()) * 100
-                resultados.append({
+                media = grupo['Respuesta'].mean()
+                desv = grupo['Respuesta'].std()
+                cv = (desv / media) * 100 if media != 0 else np.nan
+                resultados_sistema.append({
                     'Analista': analista,
                     'Día': dia,
                     'Réplicas': len(grupo),
-                    'CV (%)': cv,
-                    'Media': grupo['Respuesta'].mean(),
-                    'Std': grupo['Respuesta'].std()
+                    'Media': media,
+                    'Std': desv,
+                    'CV (%)': cv
                 })
-            if not resultados:
+            if not resultados_sistema:
                 st.error(f"Rango {rango_label}: No hay grupos válidos (Analista-Día) con ≥6 réplicas para la precisión del sistema.")
                 pdf_gen.add_text_block(f"✘ Rango {rango_label}: Insuficientes grupos (Analista-Día) para calcular precisión del sistema.", style="error")
             else:
-                df_resultados = pd.DataFrame(resultados)
-                mejor_grupo = df_resultados.loc[df_resultados['CV (%)'].idxmin()]
+                df_resultados_sistema = pd.DataFrame(resultados_sistema)
+                # Seleccionar el grupo con menor CV
+                mejor_grupo = df_resultados_sistema.loc[df_resultados_sistema['CV (%)'].idxmin()]
                 st.markdown(f"**Mejor grupo:** Analista {mejor_grupo['Analista']} - Día {mejor_grupo['Día']} con CV = {mejor_grupo['CV (%)']:.2f}%")
-                pdf_gen.add_text_block(f"Mejor grupo (Precisión del Sistema) en el rango {rango_label}: "
-                                       f"Analista {mejor_grupo['Analista']} - Día {mejor_grupo['Día']} con CV = {mejor_grupo['CV (%)']:.2f}%.")
-                st.dataframe(df_resultados.style.format({"CV (%)": "{:.2f}"}), use_container_width=True)
+                pdf_gen.add_text_block(
+                    f"Mejor grupo (Precisión del Sistema) en el rango {rango_label}: "
+                    f"Analista {mejor_grupo['Analista']} - Día {mejor_grupo['Día']} con CV = {mejor_grupo['CV (%)']:.2f}%.")
+                st.dataframe(df_resultados_sistema.style.format({"CV (%)": "{:.2f}"}), use_container_width=True)
 
+                # Seleccionar tipo de método para definir el umbral (por CCYAC)
                 metodo_sistema = st.selectbox(f"Tipo de Método para Precisión del Sistema (rango {rango_label}):",
                                               ["fisico_quimico", "biologico"], key=f"sistema_{rango_label}")
                 umbral_sistema = 1.5 if metodo_sistema == "fisico_quimico" else 3.0
@@ -700,14 +710,21 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
                 st.metric("CV (Mejor grupo)", f"{mejor_grupo['CV (%)']:.2f}%", 
                           delta="Cumple" if mejor_grupo['CV (%)'] <= umbral_sistema else "No Cumple")
 
+                # Visualización: Distribución de las respuestas en el mejor grupo
                 grupo_mejor = grupos.get_group((mejor_grupo['Analista'], mejor_grupo['Día']))
                 fig_sistema = plt.figure(figsize=(6, 4))
-                sns.scatterplot(data=grupo_mejor, x='Concentración', y='Respuesta', hue='Día', style='Analista')
-                plt.title(f"Precisión del Sistema - Mejor grupo (Rango {rango_label})")
+                # Boxplot con simbología neutra y marcador "x" para outliers
+                sns.boxplot(data=grupo_mejor, x='Analista', y='Respuesta', 
+                            flierprops=dict(marker='x', markersize=8, markerfacecolor='none', markeredgecolor='black'),
+                            palette="Greys")
+                # Stripplot con marcador de círculo para diferenciar
+                sns.stripplot(data=grupo_mejor, x='Analista', y='Respuesta', 
+                              marker="o", size=8, edgecolor='darkgray', linewidth=1, color="black", dodge=True)
                 plt.axhline(mejor_grupo['Media'], color='red', linestyle='--', label='Media')
+                plt.title(f"Precisión del Sistema - Mejor grupo (Rango {rango_label})")
                 plt.legend()
                 st.pyplot(fig_sistema)
-                pdf_gen.capture_figure(fig_sistema, f"dispersion_sistema_{rango_label}_mejor")
+                pdf_gen.capture_figure(fig_sistema, f"dispersion_sistema_{rango_label}")
                 plt.close(fig_sistema)
 
                 tabla_sistema = [
@@ -723,9 +740,18 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
                 ]
                 pdf_gen.add_table(tabla_sistema, title=f"Precisión del Sistema - Rango {rango_label}")
 
-        # ------------------------------------------------
+                # Gráfico complementario: Heatmap de CV por (Analista, Día) para este rango
+                pivot_cv = df_resultados_sistema.pivot(index="Analista", columns="Día", values="CV (%)")
+                fig_heat, ax_heat = plt.subplots(figsize=(6, 4))
+                sns.heatmap(pivot_cv, annot=True, fmt=".2f", cmap="Greys", ax=ax_heat)
+                ax_heat.set_title(f"Heatmap CV (Sistema) - Rango {rango_label}")
+                st.pyplot(fig_heat)
+                pdf_gen.capture_figure(fig_heat, f"heatmap_sistema_{rango_label}")
+                plt.close(fig_heat)
+
+        # -----------------------------------------------------
         # B: Precisión Intermedia (8.7)
-        # ------------------------------------------------
+        # -----------------------------------------------------
         with st.expander(f"📈 Precisión Intermedia - Rango {rango_label}", expanded=False):
             pdf_gen.add_subsection(f"Precisión Intermedia (8.7) - Rango {rango_label}")
             if estandares['Día'].nunique() < 2 or estandares['Analista'].nunique() < 2:
@@ -733,15 +759,21 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
                 pdf_gen.add_text_block(f"✘ Rango {rango_label}: Insuficientes días o analistas para precisión intermedia.", style="error")
             else:
                 cv_inter_df = (estandares.groupby(['Día', 'Analista'])['Respuesta']
-                               .apply(lambda x: (x.std() / x.mean()) * 100)
+                               .apply(lambda x: (x.std() / x.mean()) * 100 if x.mean() != 0 else np.nan)
                                .reset_index(name='CV'))
                 cv_min = cv_inter_df['CV'].min()
                 cv_mean = cv_inter_df['CV'].mean()
                 
                 st.markdown("#### CV por Día y Analista")
                 st.dataframe(cv_inter_df)
+                # Gráfico de barras con anotación en cada barra
                 fig_inter = plt.figure(figsize=(6, 4))
-                sns.barplot(data=cv_inter_df, x='Día', y='CV', hue='Analista')
+                ax = sns.barplot(data=cv_inter_df, x='Día', y='CV', hue='Analista', dodge=True, edgecolor="black", palette="Greys")
+                for p in ax.patches:
+                    altura = p.get_height()
+                    ax.annotate(f'{altura:.1f}%', 
+                                (p.get_x() + p.get_width() / 2., altura),
+                                ha='center', va='bottom', fontsize=9, color='black')
                 plt.axhline(cv_min, color='gray', linestyle=':', label=f"CV Mínimo = {cv_min:.2f}%")
                 plt.axhline(cv_mean, color='blue', linestyle=':', label=f"CV Promedio = {cv_mean:.2f}%")
                 plt.title(f"Precisión Intermedia - Rango {rango_label}")
@@ -750,8 +782,6 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
                 pdf_gen.capture_figure(fig_inter, f"cv_inter_{rango_label}")
                 plt.close(fig_inter)
 
-                # En lugar de un CV global calculado sobre todos los datos,
-                # se reportan los valores resumen (mínimo y promedio) de CV por grupo.
                 metodo_inter = st.selectbox(f"Tipo de Método para Precisión Intermedia (rango {rango_label}):",
                                             ["cromatografico", "quimico", "espectrofotometrico", "biologico"],
                                             key=f"inter_{rango_label}")
@@ -776,6 +806,17 @@ def calcular_precision_por_rango(datos, pdf_gen, umbral_agrupacion=1.0):
                     ["Umbral Intermedio", f"{umbral_inter}%"]
                 ]
                 pdf_gen.add_table(tabla_inter, title=f"Precisión Intermedia - Rango {rango_label}")
+
+                # Gráfico adicional: Boxplot comparativo de CV por grupo (día y analista)
+                # Aquí se usa simbología neutra: marcador "x" para outliers, paleta en grises
+                fig_box, ax_box = plt.subplots(figsize=(6, 4))
+                sns.boxplot(data=cv_inter_df, x='Día', y='CV', hue='Analista', 
+                            flierprops=dict(marker='x', markersize=8, markerfacecolor='none', markeredgecolor='black'),
+                            palette="Greys", dodge=True)
+                ax_box.set_title(f"Distribución de CV - Precisión Intermedia (Rango {rango_label})")
+                st.pyplot(fig_box)
+                pdf_gen.capture_figure(fig_box, f"box_cv_inter_{rango_label}")
+                plt.close(fig_box)
 
     st.success("✔ Análisis de Precisión por Rango finalizado para todos los rangos.")
     pdf_gen.add_text_block("✔ Análisis de Precisión por Rango finalizado para todos los rangos.")
