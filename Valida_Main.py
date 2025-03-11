@@ -39,102 +39,184 @@ from datetime import datetime
 import pytz
 
 
-
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 imagenes_dir = current_dir / "img"
 
-# Page Configuration
+# Configuración de página con estilo moderno
 st.set_page_config(
-    page_title="Validación De Métodos Analíticos",
+    page_title="Validador Analítico CUCEI",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
-    layout="wide"  # Centers all content
-)
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: black;
-        color: white;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS for title and footer
+# CSS Moderno con paleta de colores neutra y elegante
 st.markdown("""
     <style>
-    /* Title container styling */
+    :root {
+        --color-primary: #4A90E2;       /* Azul sutil */
+        --color-secondary: #50E3C2;     /* Teal vibrante pero equilibrado */
+        --bg-gradient: linear-gradient(145deg, #2C3E50, #34495E); /* Fondo oscuro en tonos blue-gray */
+        --sidebar-bg: rgba(44, 62, 80, 0.95);  /* Sidebar con tonalidad similar al fondo */
+        --card-bg: rgba(255, 255, 255, 0.08);   /* Fondo de tarjetas con transparencia */
+    }
+    
+    /* Base styling */
+    body {
+        background: var(--bg-gradient);
+        color: #ECECEC;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    
+    /* Contenedor principal del título */
     .title-container {
         display: flex;
-        justify-content: space-between; /* Extend the title container across the full width */
+        justify-content: space-between;
         align-items: center;
-        gap: 10px;
-        margin-bottom: 20px; /* Spacing below title */
-        width: 100%;
+        padding: 1rem 2rem;
+        margin: 1rem 0;
+        background: var(--card-bg);
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.15);
     }
-    .title-container img:first-child {
-        width: 120px; /* Adjust first icon size */
-        height: auto;
-    }
-    .title-container h1 {
+    
+    .main-title {
         flex: 1;
         text-align: center;
-        margin: 0;
+        font-size: 2.2rem;
+        font-weight: 700;
+        background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
-    .title-container img:last-child {
-        width: 200px; /* Adjust second icon size */
-        height: auto;
+    
+    /* Logos con efecto hover */
+    .title-container img {
+        width: auto;
+        height: 80px;
+        transition: transform 0.3s ease;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
     }
-
-    /* Footer styling */
-    .footer {
+    .title-container img:hover {
+        transform: scale(1.05);
+    }
+    
+    /* Barra lateral moderna */
+    [data-testid="stSidebar"] {
+        background: var(--sidebar-bg) !important;
+        backdrop-filter: blur(12px);
+        border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    /* Elementos del sidebar */
+    .stSelectbox [data-baseweb="select"] {
+        background: rgba(255,255,255,0.1) !important;
+        border-color: rgba(255,255,255,0.2) !important;
+        color: #ECECEC !important;
+    }
+    
+    /* Footer moderno */
+    .footer-container {
         position: fixed;
         bottom: 0;
         left: 0;
-        width: 100%;
-        background-color: rgba(0, 0, 0, 0.05); /* Light background */
-        color: gray;
+        right: 0;
+        background: var(--sidebar-bg);
+        color: #BDC3C7;
         text-align: center;
-        padding: 5px 15px;
-        font-size: small;
-        opacity: 0.8;
+        padding: 0.8rem 1rem;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        z-index: 999;
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    /* Efectos hover para elementos interactivos */
+    .stSelectbox [data-baseweb="select"]:hover {
+        border-color: var(--color-primary) !important;
+    }
+    
+    @media (max-width: 768px) {
+        .title-container {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+        }
+        .title-container img {
+            height: 60px;
+        }
+        .main-title {
+            font-size: 1.8rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Title with Icon
+# Encabezado con logos
 st.markdown("""
     <div class="title-container">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG Logo">
-        <h1>Validación de Métodos Analíticos</h1>
-        <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI Logo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG">
+        <h1 class="main-title">Plataforma de Validación Analítica</h1>
+        <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI">
     </div>
 """, unsafe_allow_html=True)
 
-# Footer
-st.markdown("""
-    <div class="footer">
-        2025 - Luis Angel Cardenas Medina
+# Footer mejorado
+current_year = datetime.now().year
+st.markdown(f"""
+    <div class="footer-container">
+        © {current_year} Centro Universitario de Ciencias Exactas e Ingenierías | 
+        Desarrollado por: Luis Angel Cardenas Medina
     </div>
 """, unsafe_allow_html=True)
 
-
-# Módulos disponibles
-modulo = st.sidebar.selectbox(
-    "Selecciona el módulo de análisis:",
-    [
-        "Linealidad y Rango",
-        "Límites de Detección y Cuantificación",
-        "Exactitud (Recuperación)",
-        "Precisión (Repetibilidad e Intermedia)",
-        "Robustez",
-        "Estabilidad"
-    ]
-)
-
-# Funciones generales
+# Sidebar con módulos (estilo moderno)
+with st.sidebar:
+    st.markdown("""
+        <style>
+            .sidebar-title {
+                font-size: 1.5rem;
+                margin-bottom: 1.5rem;
+                text-align: center;
+                color: var(--color-primary);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            /* Ajuste en el padding del contenedor principal del sidebar */
+            [data-testid="stVerticalBlock"] > div:first-child {
+                padding: 1.5rem 1rem;
+            }
+            /* Estilo para el select, con fondo semitransparente y borde sutil */
+            .stSelectbox [data-baseweb="select"] {
+                background: rgba(255,255,255,0.1) !important;
+                border-color: rgba(255,255,255,0.2) !important;
+                color: #ECECEC !important;
+                font-size: 0.95rem;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<p class="sidebar-title">Módulos Analíticos</p>', unsafe_allow_html=True)
+    
+    modulo = st.selectbox(
+        label="Seleccione el módulo:",
+        options=[
+            "Linealidad y Rango",
+            "Límites de Detección y Cuantificación",
+            "Exactitud (Recuperación)",
+            "Precisión (Repetibilidad e Intermedia)",
+            "Robustez",
+            "Estabilidad"
+        ],
+        index=0,
+        key="modulo_principal",
+        help="Seleccione el tipo de análisis a realizar"
+    )
 
 def previsualizar_datos(datos):
     """Previsualiza los datos cargados en la interfaz."""
@@ -1737,154 +1819,536 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
 
 
 if modulo == "Linealidad y Rango":
-    st.header("Análisis de Linealidad y Rango")
-    st.info("""
-        **Datos requeridos para este módulo:**
-        - **Concentración:** Concentraciones de las soluciones estándar.
-        - **Respuesta:** Valores de Respuesta medidos.
-        - **Tipo:** Identificar si es "Estándar" o "Muestra".
-        - **Día:** Identificar el día de la medición.""")  
+    with st.container():
+        # Encabezado profesional
+        st.markdown("""
+            <div style='text-align: center; padding: 1.5rem; margin-bottom: 2rem;'>
+                <h1 style='color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;'>
+                    Análisis de Linealidad y Rango
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
 
-    img_path = imagenes_dir / "muestra.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Respuesta', 'Tipo'")
+        # Contenedor de dos columnas para la información y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
 
-    
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    if procesar_archivo(datos, calcular_linealidad, modulo):
-        st.success("Análisis completado!")
+        with col_info:
+           st.markdown("""
+    <div style='background: rgba(46, 204, 113, 0.05); 
+                padding: 1.5rem; 
+                border-radius: 8px;
+                border: 1px solid rgba(46, 204, 113, 0.2);'>
+        <h3 style='color: #2ecc71; margin-top: 0;'>Estructura Requerida</h3>
+        <div style='color: #bdc3c7; line-height: 1.6;'>
+            <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                <div style='min-width: 30px; text-align: center;'></div>
+                <div style='margin-left: 10px;'><strong>Día:</strong> Número o fecha de medición</div>
+            </div>
+            <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                <div style='min-width: 30px; text-align: center;'></div>
+                <div style='margin-left: 10px;'><strong>Concentración:</strong> Valores numéricos</div>
+            </div>
+            <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                <div style='min-width: 30px; text-align: center;'></div>
+                <div style='margin-left: 10px;'><strong>Respuesta:</strong> Mediciones instrumentales</div>
+            </div>
+            <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                <div style='min-width: 30px; text-align: center;'></div>
+                <div style='margin-left: 10px;'><strong>Tipo:</strong> "Estándar" o "Muestra"</div>
+            </div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
-    pdf = st.session_state.get('current_pdf')
-    if pdf:
-            st.download_button(
-                label="⬇️ Descargar Reporte Completo",
-                data=pdf,
-                file_name=f"Reporte_{modulo.replace(' ', '_')}.pdf",
-                mime="application/pdf"
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-precision {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-precision:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-precision">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_precision",
+                label_visibility="collapsed"
             )
-    
+            st.markdown("</div>", unsafe_allow_html=True)
 
-elif modulo == "Límites de Detección y Cuantificación":
-    st.header("Cálculo de LOD y LOQ")
-    st.info("""
-        **Datos requeridos para este módulo:**
-        - **Concentración:** Concentraciones de las soluciones estándar.
-        - **Respuesta:** Valores de Respuesta medidos.
-        - **Tipo:** Identificar si es "Estándar" o "Muestra".
-        - **Día:** Día en que se realizó la medición.
-        """)  
-
-    img_path = imagenes_dir / "muestra.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Respuesta', 'Tipo'")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    
+    # Procesamiento del archivo en un contenedor separado
     if datos:
-        if procesar_archivo(datos, [calcular_lod_loq, graficar_curva_calibracion_streamlit], "Límites de Detección y Cuantificación"):
-            st.success("¡Análisis completado!")
-            if 'current_pdf' in st.session_state:
-                st.download_button(
-                    label="Descargar PDF",
-                    data=st.session_state.current_pdf,
-                    file_name="reporte_limites.pdf",
-                    mime="application/pdf"
-                )
+        with st.spinner('Analizando datos...'):
+            if procesar_archivo(datos, calcular_linealidad, modulo):
+                st.success("Análisis completado exitosamente")
+                
+                if st.session_state.get('current_pdf'):
+                    st.download_button(
+                        label="Descargar Reporte Completo",
+                        data=st.session_state.current_pdf,
+                        file_name=f"Reporte_{modulo.replace(' ', '_')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
+                        
+elif modulo == "Límites de Detección y Cuantificación":
+    with st.container():
+        # Encabezado profesional sin emojis
+        st.markdown("""
+            <div style='text-align: center; padding: 1.5rem; margin-bottom: 2rem;'>
+                <h1 style='color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;'>
+                    Límites de Detección y Cuantificación
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
 
+        # Contenedor de dos columnas para la explicación y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
+
+        with col_info:
+            st.markdown("""
+                <div style='background: rgba(46, 204, 113, 0.05);
+                            padding: 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid rgba(46, 204, 113, 0.2);'>
+                    <h3 style='color: #2ecc71; margin-top: 0;'>Estructura Requerida</h3>
+                    <div style='color: #bdc3c7; line-height: 1.6;'>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                            <div style='min-width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Día:</strong> Serie temporal de mediciones</div>
+                        </div>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                            <div style='min-width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Concentración:</strong> Valores de calibración</div>
+                        </div>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                            <div style='min-width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Respuesta:</strong> Señal instrumental</div>
+                        </div>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;'>
+                            <div style='min-width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Tipo:</strong> Identificación estándar</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-precision {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-precision:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-precision">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_precision",
+                label_visibility="collapsed"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Procesamiento del archivo en un contenedor separado
+    if datos:
+        with st.spinner('Calculando límites analíticos...'):
+            if procesar_archivo(datos, [calcular_lod_loq, graficar_curva_calibracion_streamlit], modulo):
+                st.markdown("""
+                    <div style='background: #27ae60;
+                                color: white;
+                                padding: 1rem;
+                                border-radius: 8px;
+                                margin: 2rem 0;
+                                text-align: center;'>
+                        <div style='font-size: 1.2rem;'>Proceso completado - LOD/LOQ calculados</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if st.session_state.get('current_pdf'):
+                    st.download_button(
+                        label="Descargar Reporte Técnico",
+                        data=st.session_state.current_pdf,
+                        file_name="reporte_limites.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="download_limites"
+                    )
 # Módulo de Precisión
 
 elif modulo == "Precisión (Repetibilidad e Intermedia)":
-    st.header("Evaluación de Precisión")
-    st.info(
-        """
-        **Datos requeridos para este módulo:**
-        - **Respuesta:** Datos de Respuesta agrupados por días y repeticiones.
-        """
-    )
-    img_path = imagenes_dir / "muestra.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Respuesta', 'Tipo'")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    
-    if datos:
-        if procesar_archivo(datos, [calcular_precision_por_rango], "Precisión (Repetibilidad e Intermedia)"):
-            st.success("¡Análisis completado!")
-            if 'current_pdf' in st.session_state:
-                st.download_button(
-                    label="Descargar PDF",
-                    data=st.session_state.current_pdf,
-                    file_name="reporte_Precisión.pdf",
-                    mime="application/pdf"
-                )
-    
+    with st.container():
+        # Encabezado profesional
+        st.markdown("""
+            <div style="text-align: center; padding: 1.5rem; margin-bottom: 2rem;">
+                <h1 style="color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;">
+                    Evaluación de Precisión
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
 
-# Módulo de Exactitud
-elif modulo == "Exactitud (Recuperación)":
-    st.header("Cálculo de Exactitud")
-    st.info(
-        """
-        **Datos requeridos para este módulo:**
-        - **Día:** Día en que se realizó la medición.
-        - **Concentración Teórica:** Concentración fortificada conocida.
-        - **Concentración Medida:** Concentración obtenida tras el análisis experimental.
-        """
-    )
-    img_path = imagenes_dir / "conc_exac.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Concentración Teorica', 'Concentración Real', 'Día'")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    
+        # Contenedor de dos columnas para la estructura requerida y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
+
+        with col_info:
+            st.markdown("""
+                <div style="background: rgba(46, 204, 113, 0.05);
+                            padding: 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid rgba(46, 204, 113, 0.2);">
+                    <h3 style="color: #2ecc71; margin-top: 0;">Estructura Requerida</h3>
+                    <div style="color: #bdc3c7; line-height: 1.6;">
+                        <div style="display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;">
+                            <div style="min-width: 30px; text-align: center;"></div>
+                            <div style="margin-left: 10px;"><strong>Día:</strong> Día de la medición o fecha</div>
+                        </div>
+                        <div style="display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;">
+                            <div style="min-width: 30px; text-align: center;"></div>
+                            <div style="margin-left: 10px;"><strong>Concentración:</strong> Valores numéricos</div>
+                        </div>
+                        <div style="display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;">
+                            <div style="min-width: 30px; text-align: center;"></div>
+                            <div style="margin-left: 10px;"><strong>Respuesta:</strong> Mediciones instrumentales</div>
+                        </div>
+                        <div style="display: flex; align-items: center; margin: 0.8rem 0; flex-wrap: wrap;">
+                            <div style="min-width: 30px; text-align: center;"></div>
+                            <div style="margin-left: 10px;"><strong>Tipo:</strong> "Estándar" o "Muestra"</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-precision {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-precision:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-precision">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_precision",
+                label_visibility="collapsed"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Procesamiento del archivo en un contenedor separado
     if datos:
-        if procesar_archivo(datos, [calcular_exactitud], "Exactitud y recuperación"):
-            st.success("¡Análisis completado!")
-            if 'current_pdf' in st.session_state:
-                st.download_button(
-                    label="Descargar PDF",
-                    data=st.session_state.current_pdf,
-                    file_name="reporte_exactitud.pdf",
-                    mime="application/pdf"
-                )
+        with st.spinner("Analizando datos..."):
+            if procesar_archivo(datos, [calcular_precision_por_rango], "Precisión (Repetibilidad e Intermedia)"):
+                st.success("Análisis completado.")
+                if st.session_state.get('current_pdf'):
+                    st.download_button(
+                        label="Descargar Reporte",
+                        data=st.session_state.current_pdf,
+                        file_name="reporte_Precision.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
+
+elif modulo == "Exactitud (Recuperación)":
+    with st.container():
+        # Encabezado profesional
+        st.markdown("""
+            <div style='text-align: center; padding: 1.5rem; margin-bottom: 2rem;'>
+                <h1 style='color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;'>
+                    Evaluación de Exactitud
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # Contenedor de dos columnas para la estructura requerida y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
+
+        with col_info:
+            st.markdown("""
+                <div style='background: rgba(46, 204, 113, 0.05);
+                            padding: 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid rgba(46, 204, 113, 0.2);'>
+                    <h3 style='color: #2ecc71; margin-top: 0;'>Requisitos de Datos</h3>
+                    <div style='color: #bdc3c7; line-height: 1.6;'>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0;'>
+                            <div style='width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Día:</strong> Serie temporal de mediciones</div>
+                        </div>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0;'>
+                            <div style='width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Conc. Teórica:</strong> Valores de referencia fortificados</div>
+                        </div>
+                        <div style='display: flex; align-items: center; margin: 0.8rem 0;'>
+                            <div style='width: 30px; text-align: center;'></div>
+                            <div style='margin-left: 10px;'><strong>Conc. Real:</strong> Valores obtenidos experimentalmente</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-precision {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-precision:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-precision">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_limites",
+                label_visibility="collapsed"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Procesamiento y resultados
+    if datos:
+        with st.spinner('Calculando exactitud...'):
+            if procesar_archivo(datos, [calcular_exactitud], modulo):
+                st.markdown("""
+                    <div style='background: #27ae60;
+                                color: white;
+                                padding: 1rem;
+                                border-radius: 8px;
+                                margin: 2rem 0;
+                                display: flex;
+                                align-items: center;
+                                gap: 1rem;'>
+                        <div style='font-size: 1.5rem;'>Éxito:</div>
+                        <div>Análisis de exactitud completado</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if 'current_pdf' in st.session_state:
+                    st.download_button(
+                        label="Descargar Reporte de Exactitud",
+                        data=st.session_state.current_pdf,
+                        file_name="reporte_exactitud.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="download_exactitud"
+                    )
 
 # Módulo de Robustez
 elif modulo == "Robustez":
-    st.header("Evaluación de Robustez")
-    st.info("""
-        **Datos requeridos para este módulo:**
-        - **Factores variables:** Datos que representan condiciones variables del experimento.
-        - **Resultados:** Datos de resultados obtenidos bajo dichas condiciones.
-        """) 
-    img_path = imagenes_dir / "muestra.png"
-    st.image(str(img_path), caption="Estructura requerida: Columnas 'Día', 'Concentración', 'Respuesta', 'Tipo'")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    
+    with st.container():
+        # Encabezado profesional
+        st.markdown("""
+            <div style="text-align: center; padding: 1.5rem; margin-bottom: 2rem;">
+                <h1 style="color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;">
+                    Evaluación de Robustez
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # Contenedor de dos columnas para mostrar la estructura requerida y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
+
+        with col_info:
+            st.markdown("""
+                <div style="background: rgba(46, 204, 113, 0.05);
+                            padding: 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid rgba(46, 204, 113, 0.2);">
+                    <h3 style="color: #2ecc71; margin-top: 0;">Requisitos de Datos</h3>
+                    <div style="color: #bdc3c7; line-height: 1.6;">
+                        <p><strong>Factores Variables:</strong> Datos que representan condiciones variables del experimento.</p>
+                        <p><strong>Resultados:</strong> Valores obtenidos bajo dichas condiciones (por ejemplo, Respuesta analítica, parámetros experimentales, etc.).</p>
+                        <p><strong>Columna Adicional:</strong> Se requiere que los datos incluyan al menos las columnas <em>Día</em>, <em>Concentración</em>, <em>Respuesta</em> y <em>Tipo</em> (para clasificar si son estándares o muestras).</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-robustez {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-robustez:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-robustez">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_robustez",
+                label_visibility="collapsed"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
     if datos:
-        if procesar_archivo(datos, [evaluar_robustez], "Robustez del Metodo"):
-            st.success("¡Análisis completado!")
-            if 'current_pdf' in st.session_state:
-                st.download_button(
-                    label="Descargar PDF",
-                    data=st.session_state.current_pdf,
-                    file_name="reporte_robustez.pdf",
-                    mime="application/pdf"
-                )
+        with st.spinner("Analizando datos..."):
+            if procesar_archivo(datos, [evaluar_robustez], "Robustez del Metodo"):
+                st.success("Análisis completado.")
+                if st.session_state.get('current_pdf'):
+                    st.download_button(
+                        label="Descargar PDF",
+                        data=st.session_state.current_pdf,
+                        file_name="reporte_robustez.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
 elif modulo == "Estabilidad":
-    st.header("Evaluación de Estabilidad")
-    st.info("""
-        **Datos requeridos para este módulo:**
-        - **Día:** Día de la medición (numérico o fecha)
-        - **Respuesta:** Valores de respuesta analítica
-        - **Tipo:** Clasificación de la muestra (Ej: Estándar, Muestra)
-        - **Factores Variables:** Columnas adicionales para análisis multivariable
-        """)
+    with st.container():
+        # Encabezado profesional
+        st.markdown("""
+            <div style="text-align: center; padding: 1.5rem; margin-bottom: 2rem;">
+                <h1 style="color: #2ecc71; border-bottom: 2px solid #2ecc71; padding-bottom: 0.5rem; display: inline-block;">
+                    Evaluación de Estabilidad
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
 
-    st.image(str(imagenes_dir / "muestra.png"), caption="Estructura requerida")
-    datos = st.file_uploader("Sube tu archivo:", type=['csv', 'xlsx'])
-    
+        # Contenedor de dos columnas para la estructura requerida y el área de carga
+        col_info, col_upload = st.columns([1, 1], gap="large")
+
+        with col_info:
+            st.markdown("""
+                <div style="background: rgba(46, 204, 113, 0.05);
+                            padding: 1.5rem;
+                            border-radius: 8px;
+                            border: 1px solid rgba(46, 204, 113, 0.2);">
+                    <h3 style="color: #2ecc71; margin-top: 0;">Requisitos de Datos</h3>
+                    <div style="color: #bdc3c7; line-height: 1.6;">
+                        <p><strong>Día:</strong> Fecha o día numérico de la medición.</p>
+                        <p><strong>Respuesta:</strong> Valores de la respuesta analítica.</p>
+                        <p><strong>Tipo:</strong> Clasificación de la muestra (Ej: Estándar, Muestra).</p>
+                        <p><strong>Factores Variables:</strong> Columnas adicionales para análisis multivariable.</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col_upload:
+            st.markdown("""
+                <style>
+                    .upload-container-estabilidad {
+                        border: 2px dashed #2ecc71;
+                        border-radius: 10px;
+                        padding: 2rem;
+                        text-align: center;
+                        background: rgba(46, 204, 113, 0.03);
+                        min-height: 150px;
+                        display: flex !important;
+                        flex-direction: column;
+                        justify-content: center;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .upload-container-estabilidad:hover {
+                        background: rgba(46, 204, 113, 0.08);
+                        transform: translateY(-2px);
+                    }
+                </style>
+                <div class="upload-container-estabilidad">
+                    <div style="font-size: 1.5rem; color: #2ecc71; font-weight: 500;">Subir archivo</div>
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 1rem;">Formatos soportados: CSV, Excel</div>
+            """, unsafe_allow_html=True)
+            datos = st.file_uploader(
+                " ",
+                type=['csv', 'xlsx'],
+                key="uploader_estabilidad",
+                label_visibility="collapsed"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
     if datos:
-        # Procesar con manejo de PDF integrado
-        if procesar_archivo(datos, [evaluar_estabilidad], "Estabilidad del Método"):
-            st.success("¡Análisis completado!")
-            if 'current_pdf' in st.session_state:
-                st.download_button(
-                    label="Descargar PDF",
-                    data=st.session_state.current_pdf.getvalue(),
-                    file_name="reporte_estabilidad.pdf",
-                    mime="application/pdf"
-                )
+        with st.spinner("Analizando datos..."):
+            if procesar_archivo(datos, [evaluar_estabilidad], "Estabilidad del Método"):
+                st.success("Análisis completado.")
+                if st.session_state.get('current_pdf'):
+                    st.download_button(
+                        label="Descargar PDF",
+                        data=st.session_state.current_pdf.getvalue(),
+                        file_name="reporte_estabilidad.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
