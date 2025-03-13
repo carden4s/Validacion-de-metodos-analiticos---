@@ -42,8 +42,10 @@ import pytz
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 imagenes_dir = current_dir / "img"
+import streamlit as st
+from datetime import datetime
 
-# Configuración de página con estilo moderno
+# 1. Configuración de la página
 st.set_page_config(
     page_title="Validador Analítico CUCEI",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
@@ -51,160 +53,266 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS Moderno con paleta de colores neutra y elegante
+# 2. CSS Moderno con diseño mejorado
 st.markdown("""
     <style>
+    /* Importación de la fuente Inter */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
     :root {
-        --color-primary: #4A90E2;       /* Azul sutil */
-        --color-secondary: #50E3C2;     /* Teal vibrante pero equilibrado */
-        --bg-gradient: linear-gradient(145deg, #2C3E50, #34495E); /* Fondo oscuro en tonos blue-gray */
-        --sidebar-bg: rgba(44, 62, 80, 0.95);  /* Sidebar con tonalidad similar al fondo */
-        --card-bg: rgba(255, 255, 255, 0.08);   /* Fondo de tarjetas con transparencia */
+        --color-primary: hsl(210, 70%, 60%);
+        --color-secondary: hsl(168, 70%, 60%);
+        --bg-gradient: linear-gradient(152deg, hsl(210, 35%, 15%), hsl(210, 35%, 20%));
+        --sidebar-bg: hsla(210, 35%, 15%, 0.98);
+        --card-bg: hsla(210, 35%, 100%, 0.08);
+        --border-radius: 16px;
+        --transition-speed: 0.4s;
     }
-    
+
     /* Base styling */
     body {
         background: var(--bg-gradient);
-        color: #ECECEC;
-        font-family: 'Segoe UI', system-ui, sans-serif;
+        color: hsl(0, 0%, 95%);
+        font-family: 'Inter', system-ui, sans-serif;
+        line-height: 1.6;
     }
-    
+
     /* Contenedor principal del título */
     .title-container {
-        display: flex;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
-        padding: 1rem 2rem;
-        margin: 1rem 0;
+        gap: 2rem;
+        padding: 1.5rem 3rem;
+        margin: 2rem 0;
         background: var(--card-bg);
-        border-radius: 15px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: var(--border-radius);
+        backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid hsla(0, 0%, 100%, 0.15);
+        box-shadow: 0 12px 32px hsla(0, 0%, 0%, 0.3);
+        transition: all var(--transition-speed) ease;
     }
-    
+
     .main-title {
-        flex: 1;
         text-align: center;
-        font-size: 2.2rem;
+        font-size: 2.6rem;
         font-weight: 700;
         background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        letter-spacing: -0.75px;
+        margin: 0;
+        padding: 0 2rem;
+        position: relative;
+        text-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.2);
     }
-    
-    /* Logos con efecto hover */
+
+    /* Logos con efecto hover mejorado */
     .title-container img {
-        width: auto;
-        height: 80px;
-        transition: transform 0.3s ease;
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
-    }
-    .title-container img:hover {
-        transform: scale(1.05);
+        height: 100px;
+        transition: all var(--transition-speed) cubic-bezier(0.23, 1, 0.32, 1);
+        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        opacity: 0.9;
     }
     
-    /* Barra lateral moderna */
+    .title-container img:hover {
+        transform: scale(1.08) rotate(-2deg);
+        filter: drop-shadow(0 8px 16px rgba(0,0,0,0.4));
+        opacity: 1;
+    }
+
+    /* Barra lateral mejorada */
     [data-testid="stSidebar"] {
         background: var(--sidebar-bg) !important;
-        backdrop-filter: blur(12px);
-        border-right: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(24px) saturate(180%);
+        border-right: 1px solid hsla(0, 0%, 100%, 0.1);
+        box-shadow: 6px 0 24px hsla(0, 0%, 0%, 0.2);
     }
-    
-    /* Elementos del sidebar */
+
+    /* Selectbox premium */
     .stSelectbox [data-baseweb="select"] {
-        background: rgba(255,255,255,0.1) !important;
-        border-color: rgba(255,255,255,0.2) !important;
-        color: #ECECEC !important;
+        background: hsla(0, 0%, 100%, 0.1) !important;
+        border: 2px solid hsla(0, 0%, 100%, 0.2) !important;
+        border-radius: 12px !important;
+        color: inherit !important;
+        padding: 1rem 1.25rem !important;
+        font-size: 1rem !important;
+        transition: all var(--transition-speed) ease !important;
     }
-    
-    /* Footer moderno */
+
+    .stSelectbox [data-baseweb="select"]:hover {
+        border-color: var(--color-primary) !important;
+        box-shadow: 0 4px 16px hsla(210, 70%, 60%, 0.2);
+        transform: translateY(-2px);
+    }
+
+    /* Footer premium */
     .footer-container {
         position: fixed;
         bottom: 0;
         left: 0;
         right: 0;
         background: var(--sidebar-bg);
-        color: #BDC3C7;
+        color: hsl(0, 0%, 80%);
         text-align: center;
-        padding: 0.8rem 1rem;
-        font-size: 0.9rem;
-        letter-spacing: 0.5px;
+        padding: 1.25rem;
+        font-size: 0.95rem;
+        backdrop-filter: blur(20px);
         z-index: 999;
-        border-top: 1px solid rgba(255,255,255,0.1);
+        border-top: 1px solid hsla(0, 0%, 100%, 0.1);
+        display: grid;
+        gap: 0.5rem;
+        font-weight: 300;
     }
-    
-    /* Efectos hover para elementos interactivos */
-    .stSelectbox [data-baseweb="select"]:hover {
-        border-color: var(--color-primary) !important;
+
+    /* Sección del sidebar mejorada */
+    .sidebar-title {
+        font-size: 1.8rem;
+        margin: 2rem 0;
+        text-align: center;
+        background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        padding: 0 1rem;
     }
-    
+
+    .sidebar-section {
+        padding: 2rem 0;
+        border-top: 1px solid hsla(0, 0%, 100%, 0.1);
+    }
+
+    .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        color: hsl(0, 0%, 95%) !important;
+        text-decoration: none;
+        transition: all var(--transition-speed) ease;
+        background: hsla(0, 0%, 100%, 0.05);
+        margin: 0.5rem 0;
+    }
+
+    .sidebar-link:hover {
+        background: hsla(210, 70%, 60%, 0.15);
+        transform: translateX(10px);
+        box-shadow: 4px 6px 16px hsla(210, 70%, 60%, 0.1);
+    }
+
+    .contact-info {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: hsla(0, 0%, 100%, 0.05);
+        border-radius: var(--border-radius);
+        border: 1px solid hsla(0, 0%, 100%, 0.1);
+        text-align: center;
+    }
+
     @media (max-width: 768px) {
         .title-container {
-            flex-direction: column;
-            text-align: center;
-            gap: 1rem;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
         }
-        .title-container img {
-            height: 60px;
-        }
+        
         .main-title {
-            font-size: 1.8rem;
+            font-size: 2rem;
+            order: -1;
+            padding: 0;
+        }
+        
+        .title-container img {
+            height: 80px;
+            margin: 0 auto;
+        }
+        
+        .sidebar-title {
+            font-size: 1.5rem;
         }
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Encabezado con logos
+# 3. Encabezado con logos
 st.markdown("""
-    <div class="title-container">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG">
-        <h1 class="main-title">Plataforma de Validación Analítica</h1>
-        <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI">
-    </div>
+<div class="title-container">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG">
+    <h1 class="main-title">Plataforma de Validación Analítica</h1>
+    <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI">
+</div>
 """, unsafe_allow_html=True)
 
-# Footer mejorado
+# 4. Footer fijo y mejorado
 current_year = datetime.now().year
 st.markdown(f"""
-    <div class="footer-container">
-        © {current_year} Centro Universitario de Ciencias Exactas e Ingenierías | 
-        Desarrollado por: Luis Angel Cardenas Medina
-    </div>
+<div class="footer-container">
+    <div>© {current_year} Centro Universitario de Ciencias Exactas e Ingenierías</div>
+    <div>Desarrollado por: Luis Ángel Cárdenas Medina</div>
+</div>
 """, unsafe_allow_html=True)
 
-# Sidebar con módulos (estilo moderno)
+# 5. Sidebar con título, selectbox y sección de ayuda/contacto
 with st.sidebar:
+    # CSS adicional para mejoras estéticas
     st.markdown("""
-        <style>
-            .sidebar-title {
-                font-size: 1.5rem;
-                margin-bottom: 1.5rem;
-                text-align: center;
-                color: var(--color-primary);
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            /* Ajuste en el padding del contenedor principal del sidebar */
-            [data-testid="stVerticalBlock"] > div:first-child {
-                padding: 1.5rem 1rem;
-            }
-            /* Estilo para el select, con fondo semitransparente y borde sutil */
-            .stSelectbox [data-baseweb="select"] {
-                background: rgba(255,255,255,0.1) !important;
-                border-color: rgba(255,255,255,0.2) !important;
-                color: #ECECEC !important;
-                font-size: 0.95rem;
-            }
-        </style>
+    <style>
+        .sidebar-pro {
+            background: linear-gradient(195deg, 
+                hsl(210, 35%, 12%) 0%, 
+                hsl(210, 35%, 15%) 100%) !important;
+            border-right: 1px solid rgba(79, 172, 254, 0.15) !important;
+        }
+        
+        .module-title {
+            font-size: 1.8rem !important;
+            font-weight: 600;
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 1.5rem 0 2.5rem 0;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        
+        .stSelectbox [data-baseweb="select"] {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(79, 172, 254, 0.3) !important;
+            border-radius: 10px !important;
+            padding: 0.8rem 1rem !important;
+            margin-bottom: 2rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        
+        .stSelectbox [data-baseweb="select"]:hover {
+            border-color: #4facfe !important;
+            box-shadow: 0 4px 15px rgba(79, 172, 254, 0.15);
+        }
+        
+        .support-card {
+            background: rgba(79, 172, 254, 0.08) !important;
+            border: 1px solid rgba(79, 172, 254, 0.15) !important;
+            border-radius: 12px !important;
+            padding: 1.5rem !important;
+            margin: 1rem 0 !important;
+            transition: transform 0.3s ease;
+        }
+        
+        .support-card:hover {
+            transform: translateY(-2px);
+            background: rgba(79, 172, 254, 0.12) !important;
+        }
+    </style>
     """, unsafe_allow_html=True)
+
+    # Título con diseño premium
+    st.markdown('<div class="module-title">Módulos Analíticos</div>', unsafe_allow_html=True)
     
-    st.markdown('<p class="sidebar-title">Módulos Analíticos</p>', unsafe_allow_html=True)
-    
+    # Selectbox mejorado
     modulo = st.selectbox(
-        label="Seleccione el módulo:",
+        label="Seleccionar módulo analítico:",
         options=[
             "Linealidad y Rango",
             "Límites de Detección y Cuantificación",
@@ -215,8 +323,70 @@ with st.sidebar:
         ],
         index=0,
         key="modulo_principal",
-        help="Seleccione el tipo de análisis a realizar"
+        help="Seleccione el tipo de validación a realizar"
     )
+
+    # Sección de soporte premium
+    with st.container():
+        st.markdown("""
+        <div class="support-card">
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-size: 1.1rem; font-weight: 600; color: #4facfe; margin-bottom: 0.5rem;">
+                    Guía De Uso 
+                </div>
+                <div style="font-size: 0.9rem; color: #94a3b8; line-height: 1.5;">
+                    Guía completa de uso con especificaciones técnicas y protocolos detallados.
+                </div>
+            </div>
+            <a href="https://drive.google.com/file/d/1ut1P-crNf7wDLaN_ieXwVvmkIr1UU1ZA/view" 
+               target="_blank"
+               style="text-decoration: none;">
+                <button style="
+                    width: 100%;
+                    padding: 0.7rem;
+                    background: rgba(79, 172, 254, 0.1);
+                    border: 1px solid rgba(79, 172, 254, 0.3);
+                    border-radius: 8px;
+                    color: #4facfe;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.3s ease;">
+                    Abrir Guía
+                </button>
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with st.container():
+        st.markdown("""
+        <div class="support-card">
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-size: 1.1rem; font-weight: 600; color: #4facfe; margin-bottom: 0.5rem;">
+                    Contacto
+                </div>
+                <div style="font-size: 0.9rem; color: #94a3b8; line-height: 1.5;">
+                    Correo del desarrollador para dudas y soporte técnico.
+                </div>
+            </div>
+            <a href="mailto:lui.cardenas784@gmail.com" 
+               style="text-decoration: none;">
+                <button style="
+                    width: 100%;
+                    padding: 0.7rem;
+                    background: rgba(79, 172, 254, 0.1);
+                    border: 1px solid rgba(79, 172, 254, 0.3);
+                    border-radius: 8px;
+                    color: #4facfe;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.3s ease;">
+                    Contactar Soporte
+                </button>
+            </a>
+        </div>
+        """, unsafe_allow_html=True)    
+        
+
 
 def previsualizar_datos(datos):
     """Previsualiza los datos cargados en la interfaz."""
@@ -1643,8 +1813,7 @@ def evaluar_estabilidad(datos, pdf_gen, test_type="assay"):
     import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
-    import seaborn as sns
-    
+    import seaborn as sns    
     sns.set_theme(style="whitegrid", palette="pastel")
     st.header("🧪 Análisis de Estabilidad por Grupo de Concentración")
     pdf_gen.add_section_title("Análisis de Estabilidad por Grupo de Concentración")
