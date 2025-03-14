@@ -2298,11 +2298,11 @@ elif modulo == "Exactitud (Recuperación)":
                         </div>
                         <div style='display: flex; align-items: center; margin: 0.8rem 0;'>
                             <div style='width: 30px; text-align: center;'></div>
-                            <div style='margin-left: 10px;'><strong>Conc. Teórica:</strong> Valores de referencia fortificados</div>
+                            <div style='margin-left: 10px;'><strong>Concentración Teórica:</strong> Valores de referencia fortificados</div>
                         </div>
                         <div style='display: flex; align-items: center; margin: 0.8rem 0;'>
                             <div style='width: 30px; text-align: center;'></div>
-                            <div style='margin-left: 10px;'><strong>Conc. Real:</strong> Valores obtenidos experimentalmente</div>
+                            <div style='margin-left: 10px;'><strong>Concentración Real:</strong> Valores obtenidos experimentalmente</div>
                         </div>
                     </div>
                 </div>
