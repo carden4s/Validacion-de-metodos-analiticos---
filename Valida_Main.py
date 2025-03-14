@@ -250,7 +250,7 @@ current_year = datetime.now().year
 st.markdown(f"""
 <div class="footer-container">
     <div>© {current_year} Centro Universitario de Ciencias Exactas e Ingenierías</div>
-    <div>Desarrollado por: Luis Ángel Cárdenas Medina</div>
+    <div>Desarrollado por: Luis Angel Cardenas Medina</div>
 </div>
 """, unsafe_allow_html=True)
 
