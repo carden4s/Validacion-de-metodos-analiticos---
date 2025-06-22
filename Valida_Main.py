@@ -6,37 +6,13 @@ import streamlit as st
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
-from scipy.stats import linregress, f_oneway, t, ttest_1samp
-from scipy import stats
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
-from statsmodels.formula.api import ols
-from statsmodels.stats.anova import anova_lm
+from scipy.stats import linregress, t, ttest_1samp
 from reportlab.lib.pagesizes import letter, inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from sklearn.linear_model import LinearRegression
-from patsy import dmatrices
-from statsmodels.stats.outliers_influence import OLSInfluence
-from statsmodels.stats.stattools import durbin_watson 
-from sklearn.cluster import KMeans
 import pytz
-import statsmodels.api as sm
 import plotly.express as px
-import kaleido as kl 
-import pandas as pd
-import numpy as np
-import streamlit as st
-import seaborn as sns
-import matplotlib.pyplot as plt
-import plotly.express as px
-from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
-from reportlab.lib.pagesizes import letter, inch
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from datetime import datetime
-import pytz
 
 
 # Obtener la ruta del directorio actual
