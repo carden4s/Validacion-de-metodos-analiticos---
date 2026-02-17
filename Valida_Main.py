@@ -23,7 +23,7 @@ from datetime import datetime
 
 # 1. Configuración de la página
 st.set_page_config(
-    page_title="Validador Analítico CUCEI",
+    page_title="Plataforma de Validación Analítica CUCEI",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -73,14 +73,19 @@ st.markdown("""
         text-align: center;
         font-size: 2.6rem;
         font-weight: 700;
+        /* primary visible color fallback */
+        color: #ffffff;
+        /* decorative gradient for capable browsers */
         background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         letter-spacing: -0.75px;
         margin: 0;
-        padding: 0 2rem;
+        padding: 0.5rem 2rem;
         position: relative;
-        text-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.2);
+        text-shadow: 0 6px 14px rgba(0,0,0,0.6);
+        /* ensure strong edge for better legibility */
+        -webkit-text-stroke: 0.3px rgba(255,255,255,0.95);
     }
 
     /* Logos con efecto hover mejorado */
@@ -216,7 +221,7 @@ st.markdown("""
 st.markdown("""
 <div class="title-container">
     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG">
-    <h1 class="main-title">Plataforma de Validación Analítica</h1>
+    <h1 class="main-title">Plataforma de Validación Analítica CUCEI</h1>
     <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI">
 </div>
 """, unsafe_allow_html=True)
@@ -245,12 +250,14 @@ with st.sidebar:
         .module-title {
             font-size: 1.8rem !important;
             font-weight: 600;
+            color: #ffffff; /* fallback for contrast */
             background: linear-gradient(45deg, #4facfe, #00f2fe);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin: 1.5rem 0 2.5rem 0;
             text-align: center;
             letter-spacing: -0.5px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.45);
         }
         
         .stSelectbox [data-baseweb="select"] {
