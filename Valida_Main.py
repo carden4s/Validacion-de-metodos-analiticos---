@@ -190,26 +190,26 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-        # Theme toggle widget (persists choice in localStorage)
-        try:
-                st.components.v1.html("""
-                <div style="display:flex;gap:8px;align-items:center;padding:8px 4px;">
-                    <label style="font-weight:600;margin-right:6px;color:var(--text-color);">Tema</label>
-                    <button id="btn-light" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Blanco</button>
-                    <button id="btn-dark" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Oscuro</button>
-                </div>
-                <script>
-                const applyTheme = (t)=>{
-                    if(t==='light'){document.documentElement.classList.add('light-theme'); localStorage.setItem('sv_theme','light');}
-                    else {document.documentElement.classList.remove('light-theme'); localStorage.setItem('sv_theme','dark');}
-                }
-                document.getElementById('btn-light').addEventListener('click',()=>applyTheme('light'));
-                document.getElementById('btn-dark').addEventListener('click',()=>applyTheme('dark'));
-                window.addEventListener('load',()=>{const t=localStorage.getItem('sv_theme')||'dark'; applyTheme(t);});
-                </script>
-                """, height=64)
-        except Exception:
-                pass
+    # Theme toggle widget (persists choice in localStorage)
+    try:
+        st.components.v1.html("""
+        <div style="display:flex;gap:8px;align-items:center;padding:8px 4px;">
+            <label style="font-weight:600;margin-right:6px;color:var(--text-color);">Tema</label>
+            <button id="btn-light" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Blanco</button>
+            <button id="btn-dark" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Oscuro</button>
+        </div>
+        <script>
+        const applyTheme = (t)=>{
+            if(t==='light'){document.documentElement.classList.add('light-theme'); localStorage.setItem('sv_theme','light');}
+            else {document.documentElement.classList.remove('light-theme'); localStorage.setItem('sv_theme','dark');}
+        }
+        document.getElementById('btn-light').addEventListener('click',()=>applyTheme('light'));
+        document.getElementById('btn-dark').addEventListener('click',()=>applyTheme('dark'));
+        window.addEventListener('load',()=>{const t=localStorage.getItem('sv_theme')||'dark'; applyTheme(t);});
+        </script>
+        """, height=64)
+    except Exception:
+        pass
 
     # Título con diseño premium
     st.markdown('<div class="module-title">Módulos Analíticos</div>', unsafe_allow_html=True)
