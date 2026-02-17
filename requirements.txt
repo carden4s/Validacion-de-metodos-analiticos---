@@ -13,5 +13,5 @@ scikit-learn
 pytz
 xlsxwriter
 kaleido
-altair
-vega_datasets
+altair==4.2.2
+vega_datasets==0.9.0
