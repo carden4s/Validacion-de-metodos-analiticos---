@@ -13,3 +13,5 @@ scikit-learn
 pytz
 xlsxwriter
 kaleido
+altair
+vega_datasets
