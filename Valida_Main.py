@@ -18,6 +18,8 @@ import plotly.express as px
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 imagenes_dir = current_dir / "img"
+# Current year for footer and headers
+current_year = datetime.now().year
 import streamlit as st
 from datetime import datetime
 
