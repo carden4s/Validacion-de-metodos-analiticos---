@@ -18,118 +18,211 @@ import plotly.express as px
 # Obtener la ruta del directorio actual
 current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 imagenes_dir = current_dir / "img"
-# Current year for footer and headers
-current_year = datetime.now().year
 import streamlit as st
 from datetime import datetime
 
 # 1. Configuración de la página
 st.set_page_config(
-    page_title="Plataforma de Validación Analítica CUCEI",
+    page_title="Validador Analítico CUCEI",
     page_icon="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Escudo_CUCEI.svg/424px-Escudo_CUCEI.svg.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS Moderno con diseño mejorado + theme support
+# 2. CSS Moderno con diseño mejorado
 st.markdown("""
     <style>
+    /* Importación de la fuente Inter */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
 
     :root {
-        /* Primary brand colors (dark theme defaults) */
-        --color-primary: #2E8BFF; /* vibrant blue */
-        --color-secondary: #00C897; /* fresh green */
-        --bg-gradient: linear-gradient(152deg, #071124 0%, #0b1a2a 100%);
-        --sidebar-bg: rgba(8,12,20,0.95);
-        --card-bg: rgba(255,255,255,0.03);
-        --text-color: #EAF4FF;
-        --muted-color: rgba(234,244,255,0.8);
-        --border-color: rgba(255,255,255,0.08);
-        --accent-shadow: rgba(46,139,255,0.12);
+        --color-primary: hsl(210, 70%, 60%);
+        --color-secondary: hsl(168, 70%, 60%);
+        --bg-gradient: linear-gradient(152deg, hsl(210, 35%, 15%), hsl(210, 35%, 20%));
+        --sidebar-bg: hsla(210, 35%, 15%, 0.98);
+        --card-bg: hsla(210, 35%, 100%, 0.08);
         --border-radius: 16px;
-        --transition-speed: 0.35s;
+        --transition-speed: 0.4s;
     }
 
-    /* Light theme overrides */
-    .light-theme {
-        --color-primary: #0b63ff;
-        --color-secondary: #00a678;
-        --bg-gradient: linear-gradient(152deg,#f7fbff 0%, #eef6ff 100%);
-        --sidebar-bg: #ffffff;
-        --card-bg: rgba(11,23,38,0.02);
-        --text-color: #07203a;
-        --muted-color: rgba(7,32,58,0.75);
-        --border-color: rgba(7,32,58,0.06);
-        --accent-shadow: rgba(11,99,255,0.06);
-    }
-
-    /* Base styling uses variables for full theming */
+    /* Base styling */
     body {
         background: var(--bg-gradient);
-        color: var(--text-color);
-        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+        color: hsl(0, 0%, 95%);
+        font-family: 'Inter', system-ui, sans-serif;
         line-height: 1.6;
-        transition: background var(--transition-speed) ease, color var(--transition-speed) ease;
     }
 
+    /* Contenedor principal del título */
     .title-container {
         display: grid;
         grid-template-columns: auto 1fr auto;
         align-items: center;
-        gap: 1.25rem;
-        padding: 1.25rem 2rem;
-        margin: 1.75rem 0;
+        gap: 2rem;
+        padding: 1.5rem 3rem;
+        margin: 2rem 0;
         background: var(--card-bg);
         border-radius: var(--border-radius);
-        backdrop-filter: blur(14px) saturate(140%);
-        border: 1px solid var(--border-color);
-        box-shadow: 0 10px 28px rgba(2,6,12,0.45);
+        backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid hsla(0, 0%, 100%, 0.15);
+        box-shadow: 0 12px 32px hsla(0, 0%, 0%, 0.3);
         transition: all var(--transition-speed) ease;
     }
 
     .main-title {
         text-align: center;
-        font-size: 2.4rem;
+        font-size: 2.6rem;
         font-weight: 700;
-        color: var(--text-color);
         background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        letter-spacing: -0.6px;
+        letter-spacing: -0.75px;
         margin: 0;
-        padding: 0.5rem 1.25rem;
+        padding: 0 2rem;
         position: relative;
-        text-shadow: 0 6px 14px rgba(0,0,0,0.45);
+        text-shadow: 0 4px 8px hsla(0, 0%, 0%, 0.2);
     }
 
-    .title-container img { height: 92px; transition: all var(--transition-speed) cubic-bezier(.2,.9,.3,1); filter: drop-shadow(0 6px 18px rgba(0,0,0,0.35)); opacity:0.95 }
-    .title-container img:hover { transform: scale(1.06) rotate(-1.5deg); filter: drop-shadow(0 10px 24px rgba(0,0,0,0.42)); opacity:1 }
+    /* Logos con efecto hover mejorado */
+    .title-container img {
+        height: 100px;
+        transition: all var(--transition-speed) cubic-bezier(0.23, 1, 0.32, 1);
+        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        opacity: 0.9;
+    }
+    
+    .title-container img:hover {
+        transform: scale(1.08) rotate(-2deg);
+        filter: drop-shadow(0 8px 16px rgba(0,0,0,0.4));
+        opacity: 1;
+    }
 
+    /* Barra lateral mejorada */
     [data-testid="stSidebar"] {
         background: var(--sidebar-bg) !important;
-        backdrop-filter: blur(18px) saturate(150%);
-        border-right: 1px solid var(--border-color);
-        box-shadow: 6px 0 24px rgba(0,0,0,0.18);
+        backdrop-filter: blur(24px) saturate(180%);
+        border-right: 1px solid hsla(0, 0%, 100%, 0.1);
+        box-shadow: 6px 0 24px hsla(0, 0%, 0%, 0.2);
     }
 
-    .stSelectbox [data-baseweb="select"] { background: rgba(255,255,255,0.04) !important; border-radius:12px !important; padding:0.8rem 1rem !important }
+    /* Selectbox premium */
+    .stSelectbox [data-baseweb="select"] {
+        background: hsla(0, 0%, 100%, 0.1) !important;
+        border: 2px solid hsla(0, 0%, 100%, 0.2) !important;
+        border-radius: 12px !important;
+        color: inherit !important;
+        padding: 1rem 1.25rem !important;
+        font-size: 1rem !important;
+        transition: all var(--transition-speed) ease !important;
+    }
 
-    .footer-container { position: fixed; bottom:0; left:0; right:0; background: var(--sidebar-bg); color: var(--muted-color); text-align:center; padding:1rem; font-size:0.95rem; backdrop-filter: blur(12px); z-index:999; border-top:1px solid var(--border-color) }
+    .stSelectbox [data-baseweb="select"]:hover {
+        border-color: var(--color-primary) !important;
+        box-shadow: 0 4px 16px hsla(210, 70%, 60%, 0.2);
+        transform: translateY(-2px);
+    }
 
-    .sidebar-title { font-size:1.6rem; margin:1.5rem 0; text-align:center; color:var(--text-color); font-weight:700 }
+    /* Footer premium */
+    .footer-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--sidebar-bg);
+        color: hsl(0, 0%, 80%);
+        text-align: center;
+        padding: 1.25rem;
+        font-size: 0.95rem;
+        backdrop-filter: blur(20px);
+        z-index: 999;
+        border-top: 1px solid hsla(0, 0%, 100%, 0.1);
+        display: grid;
+        gap: 0.5rem;
+        font-weight: 300;
+    }
 
-    .sidebar-section { padding:1.5rem 0; border-top:1px solid var(--border-color) }
+    /* Sección del sidebar mejorada */
+    .sidebar-title {
+        font-size: 1.8rem;
+        margin: 2rem 0;
+        text-align: center;
+        background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        padding: 0 1rem;
+    }
 
-    .sidebar-link { display:flex; align-items:center; gap:0.9rem; padding:0.9rem 1.1rem; border-radius:10px; color:var(--text-color) !important; background: rgba(255,255,255,0.02); margin:0.45rem 0 }
-    .sidebar-link:hover { transform: translateX(6px); box-shadow: 4px 8px 20px var(--accent-shadow) }
+    .sidebar-section {
+        padding: 2rem 0;
+        border-top: 1px solid hsla(0, 0%, 100%, 0.1);
+    }
 
-    .contact-info { margin-top:1.6rem; padding:1rem; background: rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); text-align:center }
+    .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        color: hsl(0, 0%, 95%) !important;
+        text-decoration: none;
+        transition: all var(--transition-speed) ease;
+        background: hsla(0, 0%, 100%, 0.05);
+        margin: 0.5rem 0;
+    }
 
-    @media (max-width: 768px){ .title-container{ grid-template-columns:1fr; gap:1rem; padding:1rem } .main-title{ font-size:1.9rem } .title-container img{ height:72px } }
+    .sidebar-link:hover {
+        background: hsla(210, 70%, 60%, 0.15);
+        transform: translateX(10px);
+        box-shadow: 4px 6px 16px hsla(210, 70%, 60%, 0.1);
+    }
 
+    .contact-info {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: hsla(0, 0%, 100%, 0.05);
+        border-radius: var(--border-radius);
+        border: 1px solid hsla(0, 0%, 100%, 0.1);
+        text-align: center;
+    }
+
+    @media (max-width: 768px) {
+        .title-container {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+        
+        .main-title {
+            font-size: 2rem;
+            order: -1;
+            padding: 0;
+        }
+        
+        .title-container img {
+            height: 80px;
+            margin: 0 auto;
+        }
+        
+        .sidebar-title {
+            font-size: 1.5rem;
+        }
+    }
     </style>
 """, unsafe_allow_html=True)
+
+# 3. Encabezado con logos
+st.markdown("""
+<div class="title-container">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Escudo_UdeG.svg/662px-Escudo_UdeG.svg.png" alt="UDG">
+    <h1 class="main-title">Plataforma de Validación Analítica</h1>
+    <img src="https://practicas.cucei.udg.mx/dist/imagenes/logo_cucei_blanco.png" alt="CUCEI">
+</div>
+""", unsafe_allow_html=True)
+
+# 4. Footer fijo y mejorado
+current_year = datetime.now().year
 st.markdown(f"""
 <div class="footer-container">
     <div>© {current_year} Centro Universitario de Ciencias Exactas e Ingenierías</div>
@@ -152,14 +245,12 @@ with st.sidebar:
         .module-title {
             font-size: 1.8rem !important;
             font-weight: 600;
-            color: #ffffff; /* fallback for contrast */
             background: linear-gradient(45deg, #4facfe, #00f2fe);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin: 1.5rem 0 2.5rem 0;
             text-align: center;
             letter-spacing: -0.5px;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.45);
         }
         
         .stSelectbox [data-baseweb="select"] {
@@ -191,27 +282,6 @@ with st.sidebar:
         }
     </style>
     """, unsafe_allow_html=True)
-
-    # Theme toggle widget (persists choice in localStorage)
-    try:
-        st.components.v1.html("""
-        <div style="display:flex;gap:8px;align-items:center;padding:8px 4px;">
-            <label style="font-weight:600;margin-right:6px;color:var(--text-color);">Tema</label>
-            <button id="btn-light" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Blanco</button>
-            <button id="btn-dark" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;">Oscuro</button>
-        </div>
-        <script>
-        const applyTheme = (t)=>{
-            if(t==='light'){document.documentElement.classList.add('light-theme'); localStorage.setItem('sv_theme','light');}
-            else {document.documentElement.classList.remove('light-theme'); localStorage.setItem('sv_theme','dark');}
-        }
-        document.getElementById('btn-light').addEventListener('click',()=>applyTheme('light'));
-        document.getElementById('btn-dark').addEventListener('click',()=>applyTheme('dark'));
-        window.addEventListener('load',()=>{const t=localStorage.getItem('sv_theme')||'dark'; applyTheme(t);});
-        </script>
-        """, height=64)
-    except Exception:
-        pass
 
     # Título con diseño premium
     st.markdown('<div class="module-title">Módulos Analíticos</div>', unsafe_allow_html=True)
