@@ -73,9 +73,8 @@ st.markdown("""
         text-align: center;
         font-size: 2.6rem;
         font-weight: 700;
-        background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        /* Use a single solid color for the title text */
+        color: var(--color-primary);
         letter-spacing: -0.75px;
         margin: 0;
         padding: 0 2rem;
